@@ -1,0 +1,19 @@
+# Скомпилированные учебные бинарники — пересобираются через `make`
+crackmes/build/
+*.o
+*.so
+*.a
+*.elf
+
+# Дампы и рабочие артефакты анализа
+*.dump
+*.patched
+core
+core.*
+peda-session-*.txt
+.gdb_history
+
+# Python
+__pycache__/
+*.pyc
+.venv/
