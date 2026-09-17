@@ -34,6 +34,12 @@ for f in md_files:
         line = text[:m.start()].count("\n") + 1
         add("ВЁРСТКА", f"{rel}:{line}", "слипшийся маркер ** после фразы")
 
+    # 2b. Посторонние иероглифы: при генерации текста изредка проскакивает
+    # символ чужой письменности. Глазами такое не ловится.
+    for m in re.finditer(r"[぀-ヿ一-鿿가-힯]", text):
+        line = text[:m.start()].count("\n") + 1
+        add("СИМВОЛ", f"{rel}:{line}", f"посторонний символ {m.group(0)!r}")
+
     # 3. битые ссылки на .md
     for m in re.finditer(r"\]\(([^)#]+\.md)[^)]*\)", text):
         target = m.group(1)
