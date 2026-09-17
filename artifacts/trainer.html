@@ -1,0 +1,382 @@
+<title>Тренажёр реверсера</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --ground:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --ink:#161b24; --muted:#5c6679; --line:#d7dce5;
+    --accent:#a86a12; --accent-soft:#f5e7cf;
+    --ok:#1f7a53; --ok-soft:#dbf0e6;
+    --bad:#a83232; --bad-soft:#f7dede;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#0e121a; --surface:#161c27; --surface-2:#1d2431;
+      --ink:#e7eaf1; --muted:#8a94a8; --line:#2a3343;
+      --accent:#e8a33d; --accent-soft:#3a2d17;
+      --ok:#5fc08f; --ok-soft:#14301f;
+      --bad:#e07474; --bad-soft:#331818;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0e121a; --surface:#161c27; --surface-2:#1d2431;
+    --ink:#e7eaf1; --muted:#8a94a8; --line:#2a3343;
+    --accent:#e8a33d; --accent-soft:#3a2d17;
+    --ok:#5fc08f; --ok-soft:#14301f;
+    --bad:#e07474; --bad-soft:#331818;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.55;
+    padding-inline:16px; padding-block:24px 40px;
+  }
+  .wrap{max-width:640px; margin:0 auto}
+
+  header{margin-bottom:20px}
+  h1{
+    font-size:clamp(22px,5vw,30px); font-weight:700; margin:0 0 6px;
+    letter-spacing:-.01em; text-wrap:balance;
+  }
+  .sub{color:var(--muted); font-size:14px; margin:0}
+
+  /* режимы */
+  .modes{display:flex; flex-wrap:wrap; gap:8px; margin:20px 0}
+  .mode{
+    font:500 13px/1 var(--sans); color:var(--muted);
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; padding:9px 14px; cursor:pointer;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .mode:hover{color:var(--ink)}
+  .mode[aria-pressed="true"]{
+    background:var(--accent); border-color:var(--accent);
+    color:var(--ground); font-weight:600;
+  }
+  .mode:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  /* карточка задачи */
+  .card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:14px; padding:24px 20px; margin-bottom:16px;
+  }
+  .prompt{color:var(--muted); font-size:13px; margin:0 0 14px; letter-spacing:.03em; text-transform:uppercase}
+  .value{
+    font-family:var(--mono); font-size:clamp(28px,8vw,42px); font-weight:600;
+    letter-spacing:.02em; word-break:break-all; margin:0 0 20px;
+    font-variant-numeric:tabular-nums;
+  }
+  .value .dim{color:var(--muted)}
+
+  .answer{display:flex; gap:8px; flex-wrap:wrap}
+  input[type=text]{
+    flex:1 1 180px; min-width:0;
+    font-family:var(--mono); font-size:18px; color:var(--ink);
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:12px 14px;
+  }
+  input[type=text]:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+  button.go{
+    font:600 15px/1 var(--sans); color:var(--ground); background:var(--accent);
+    border:0; border-radius:9px; padding:12px 20px; cursor:pointer;
+  }
+  button.go:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+
+  /* обратная связь */
+  .feedback{border-radius:11px; padding:14px 16px; margin-bottom:16px; font-size:15px}
+  .feedback.ok{background:var(--ok-soft); border:1px solid var(--ok); color:var(--ink)}
+  .feedback.bad{background:var(--bad-soft); border:1px solid var(--bad); color:var(--ink)}
+  .feedback b{font-family:var(--mono)}
+  .feedback .head{font-weight:600; margin-bottom:6px; display:block}
+  .feedback .why{color:var(--muted); font-size:14px; line-height:1.5}
+  .feedback .why code{font-family:var(--mono); color:var(--ink)}
+
+  /* статистика */
+  .stats{display:flex; gap:10px; flex-wrap:wrap}
+  .stat{
+    flex:1 1 90px; background:var(--surface); border:1px solid var(--line);
+    border-radius:11px; padding:12px 14px;
+  }
+  .stat .n{font-family:var(--mono); font-size:22px; font-weight:600; font-variant-numeric:tabular-nums}
+  .stat .l{color:var(--muted); font-size:12px; letter-spacing:.02em}
+  .stat.streak .n{color:var(--accent)}
+
+  details.cheat{margin-top:22px; border-top:1px solid var(--line); padding-top:16px}
+  details.cheat summary{cursor:pointer; color:var(--muted); font-size:14px; font-weight:500}
+  details.cheat summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .cheat-body{overflow-x:auto; margin-top:12px}
+  table{border-collapse:collapse; font-family:var(--mono); font-size:13px; width:100%}
+  th,td{border:1px solid var(--line); padding:5px 9px; text-align:left}
+  th{color:var(--muted); font-weight:500}
+
+  footer{margin-top:26px; color:var(--muted); font-size:13px; line-height:1.6}
+  footer a{color:var(--accent)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Тренажёр реверсера</h1>
+    <p class="sub">Шесть навыков, которые в реверсе нужны каждую секунду. Тренируй до автоматизма — как таблицу умножения.</p>
+  </header>
+
+  <div class="modes" id="modes" role="group" aria-label="Режим тренировки"></div>
+
+  <div class="card">
+    <p class="prompt" id="prompt">Переведи в десятичную</p>
+    <p class="value" id="value">0x2A</p>
+    <form class="answer" id="form">
+      <input type="text" id="answer" autocomplete="off" autocapitalize="off"
+             spellcheck="false" aria-label="Твой ответ" placeholder="ответ">
+      <button class="go" type="submit" id="submit">Проверить</button>
+    </form>
+  </div>
+
+  <div id="feedback"></div>
+
+  <div class="stats">
+    <div class="stat streak">
+      <div class="n" id="s-streak">0</div>
+      <div class="l">серия подряд</div>
+    </div>
+    <div class="stat">
+      <div class="n" id="s-total">0</div>
+      <div class="l">всего решено</div>
+    </div>
+    <div class="stat">
+      <div class="n" id="s-acc">—</div>
+      <div class="l">точность</div>
+    </div>
+  </div>
+
+  <details class="cheat">
+    <summary>Шпаргалка — открывай, только если совсем застрял</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>hex</th><th>dec</th><th>bin</th><th>hex</th><th>dec</th><th>bin</th></tr>
+        <tr><td>0</td><td>0</td><td>0000</td><td>8</td><td>8</td><td>1000</td></tr>
+        <tr><td>1</td><td>1</td><td>0001</td><td>9</td><td>9</td><td>1001</td></tr>
+        <tr><td>2</td><td>2</td><td>0010</td><td>A</td><td>10</td><td>1010</td></tr>
+        <tr><td>3</td><td>3</td><td>0011</td><td>B</td><td>11</td><td>1011</td></tr>
+        <tr><td>4</td><td>4</td><td>0100</td><td>C</td><td>12</td><td>1100</td></tr>
+        <tr><td>5</td><td>5</td><td>0101</td><td>D</td><td>13</td><td>1101</td></tr>
+        <tr><td>6</td><td>6</td><td>0110</td><td>E</td><td>14</td><td>1110</td></tr>
+        <tr><td>7</td><td>7</td><td>0111</td><td>F</td><td>15</td><td>1111</td></tr>
+      </table>
+      <p class="sub" style="margin-top:10px">
+        Вес позиций в hex: 1, 16, 256, 4096. ASCII: <code>A</code>=65, <code>a</code>=97, <code>0</code>=48.
+      </p>
+    </div>
+  </details>
+
+  <footer>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>, главы 1–7.<br>
+    Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var H = "0123456789ABCDEF";
+  function ri(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+  function hex(n,w){ var s = n.toString(16).toUpperCase(); while(w && s.length<w) s = "0"+s; return s; }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+  var TERMS = [
+    ["byte","байт"], ["pointer","указатель"], ["stack","стек"], ["heap","куча"],
+    ["register","регистр"], ["breakpoint","точка останова"], ["entry point","точка входа"],
+    ["import","импорт"], ["section","секция"], ["packer","упаковщик"],
+    ["obfuscation","обфускация"], ["disassembler","дизассемблер"],
+    ["decompiler","декомпилятор"], ["debugger","отладчик"], ["patch","патч"],
+    ["endianness","порядок байтов"], ["executable","исполняемый файл"],
+    ["header","заголовок"], ["symbol","символ"], ["dump","дамп"]
+  ];
+
+  var MODES = {
+    hex2dec: {
+      label:"HEX → DEC",
+      make:function(){
+        var n = pick([ri(10,255), ri(256,65535), pick([0xFF,0x100,0x1000,0x7F,0x80,0x400])]);
+        return {
+          prompt:"Переведи в десятичную",
+          value:"0x"+hex(n),
+          check:function(s){ return parseInt(s.trim(),10) === n; },
+          right:String(n),
+          why:function(){
+            var h = hex(n), parts=[], w=1, out=[];
+            for(var i=h.length-1;i>=0;i--){ parts.unshift(H.indexOf(h[i])+"×"+w); w*=16; }
+            for(var j=0;j<h.length;j++){ out.push(H.indexOf(h[j])*Math.pow(16,h.length-1-j)); }
+            return "Вес позиций справа налево: 1, 16, 256, 4096… Считаем: "+
+                   parts.join(" + ")+" = "+out.join(" + ")+" = <code>"+n+"</code>.";
+          }
+        };
+      }
+    },
+    dec2hex: {
+      label:"DEC → HEX",
+      make:function(){
+        var n = pick([ri(16,255), ri(256,4095), pick([255,256,1024,4096,127,128])]);
+        var h = hex(n);
+        return {
+          prompt:"Переведи в шестнадцатеричную",
+          value:String(n),
+          check:function(s){
+            var t = s.trim().toUpperCase().replace(/^0X/,"").replace(/H$/,"");
+            return t.replace(/^0+/,"") === h.replace(/^0+/,"") && t.length>0;
+          },
+          right:"0x"+h,
+          why:function(){
+            var steps=[], x=n;
+            while(x>0){ steps.push(x+" ÷ 16 = "+Math.floor(x/16)+", остаток "+H[x%16]); x=Math.floor(x/16); }
+            return "Делим на 16 и читаем остатки снизу вверх:<br>"+steps.join("<br>")+
+                   "<br>Получается <code>0x"+h+"</code>.";
+          }
+        };
+      }
+    },
+    endian: {
+      label:"Порядок байтов",
+      make:function(){
+        var n = pick([ri(1,4095), ri(1,65535), pick([1000,4096,256,1,4200992])]);
+        var b=[], x=n;
+        for(var i=0;i<4;i++){ b.push(hex(x & 0xFF,2)); x = Math.floor(x/256); }
+        return {
+          prompt:"Байты в памяти (little-endian). Какое это число?",
+          value:b.join(" "),
+          check:function(s){ return parseInt(s.trim(),10) === n; },
+          right:String(n),
+          why:function(){
+            var rev = b.slice().reverse();
+            return "x86 хранит число задом наперёд. Переворачиваем: <code>"+b.join(" ")+
+                   "</code> → <code>"+rev.join(" ")+"</code> → <code>0x"+rev.join("")+
+                   "</code> = <code>"+n+"</code>.<br>Подсказка: нули справа в памяти почти всегда значат маленькое число.";
+          }
+        };
+      }
+    },
+    ascii: {
+      label:"ASCII",
+      make:function(){
+        var w = pick(["Rev","Hello","byte","PE","Code","exe","hack","Flag","main","push"]);
+        var b = [];
+        for(var i=0;i<w.length;i++) b.push(hex(w.charCodeAt(i),2));
+        return {
+          prompt:"Расшифруй байты как текст",
+          value:b.join(" "),
+          check:function(s){ return s.trim() === w; },
+          right:w,
+          why:function(){
+            var rows=[];
+            for(var i=0;i<w.length;i++) rows.push("<code>0x"+b[i]+"</code> = "+w.charCodeAt(i)+" = <code>"+w[i]+"</code>");
+            return rows.join("<br>")+"<br>Опоры: <code>A</code>=65 (0x41), <code>a</code>=97 (0x61), <code>0</code>=48 (0x30).";
+          }
+        };
+      }
+    },
+    signed: {
+      label:"Знаковые",
+      make:function(){
+        var raw = pick([0xFF,0xFE,0xFB,0x80,0x7F,0x01,0xF0,0x9C,0xC0]);
+        var val = raw > 127 ? raw - 256 : raw;
+        return {
+          prompt:"Байт как ЗНАКОВОЕ число (дополнительный код)",
+          value:"0x"+hex(raw,2),
+          check:function(s){ return parseInt(s.trim().replace(/\s/g,""),10) === val; },
+          right:String(val),
+          why:function(){
+            if(raw<=127) return "Старший бит равен 0 — число положительное, значит знаковое и беззнаковое совпадают: <code>"+val+"</code>.";
+            return "Старший бит равен 1 — число отрицательное. Вычитаем 256: "+raw+" − 256 = <code>"+val+
+                   "</code>.<br>Как беззнаковое тот же байт читался бы как "+raw+". В самом байте не записано, какой он — это решают инструкции.";
+          }
+        };
+      }
+    },
+    terms: {
+      label:"Термины",
+      make:function(){
+        var t = pick(TERMS);
+        return {
+          prompt:"Переведи термин на русский",
+          value:t[0],
+          check:function(s){
+            var a = s.trim().toLowerCase().replace(/ё/g,"е");
+            var b = t[1].toLowerCase().replace(/ё/g,"е");
+            return a === b || (b.indexOf(a)===0 && a.length >= Math.max(4, b.length-3));
+          },
+          right:t[1],
+          why:function(){ return "Английский термин <code>"+t[0]+"</code> — это «"+t[1]+"». Полный словарь с произношением лежит в GLOSSARY.md."; }
+        };
+      }
+    }
+  };
+
+  var order = ["hex2dec","dec2hex","endian","ascii","signed","terms"];
+  var cur = "hex2dec", task = null;
+  var st = { total:0, right:0, streak:0, best:0 };
+
+  try { var saved = localStorage.getItem("rev-trainer"); if(saved) st = JSON.parse(saved); } catch(e){}
+
+  var $ = function(id){ return document.getElementById(id); };
+  var elModes=$("modes"), elPrompt=$("prompt"), elValue=$("value"),
+      elAns=$("answer"), elFb=$("feedback"), elForm=$("form");
+
+  order.forEach(function(k){
+    var b = document.createElement("button");
+    b.type="button"; b.className="mode"; b.textContent = MODES[k].label;
+    b.setAttribute("aria-pressed", k===cur ? "true":"false");
+    b.addEventListener("click", function(){ cur = k; syncModes(); next(); });
+    elModes.appendChild(b);
+  });
+
+  function syncModes(){
+    var bs = elModes.querySelectorAll(".mode");
+    order.forEach(function(k,i){ bs[i].setAttribute("aria-pressed", k===cur ? "true":"false"); });
+  }
+
+  function save(){ try{ localStorage.setItem("rev-trainer", JSON.stringify(st)); }catch(e){} }
+
+  function stats(){
+    $("s-streak").textContent = st.streak;
+    $("s-total").textContent = st.total;
+    $("s-acc").textContent = st.total ? Math.round(st.right/st.total*100)+"%" : "—";
+  }
+
+  function next(){
+    task = MODES[cur].make();
+    elPrompt.textContent = task.prompt;
+    elValue.textContent = task.value;
+    elAns.value = ""; elFb.innerHTML = "";
+    elAns.focus();
+  }
+
+  elForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    if(!task) return;
+    if(!elAns.value.trim()) return;
+
+    var ok = false;
+    try { ok = task.check(elAns.value); } catch(err){ ok = false; }
+
+    st.total++;
+    if(ok){ st.right++; st.streak++; if(st.streak>st.best) st.best=st.streak; }
+    else { st.streak = 0; }
+    save(); stats();
+
+    var d = document.createElement("div");
+    d.className = "feedback " + (ok ? "ok" : "bad");
+    d.innerHTML = ok
+      ? '<span class="head">Верно</span><span class="why">'+task.why()+'</span>'
+      : '<span class="head">Неверно. Правильный ответ: <b>'+task.right+'</b></span><span class="why">'+task.why()+'</span>';
+    elFb.innerHTML = "";
+    elFb.appendChild(d);
+
+    setTimeout(next, ok ? 900 : 4200);
+  });
+
+  stats();
+  next();
+})();
+</script>
