@@ -43,7 +43,7 @@ int main(void)
 {
     char buf[64];
 
-    printf("Введите серийный номер: ");
+    printf("Vvedite seriynyy nomer: ");
     fflush(stdout);
 
     if (!fgets(buf, sizeof buf, stdin))
@@ -51,10 +51,10 @@ int main(void)
     buf[strcspn(buf, "\n")] = '\0';
 
     if (check_serial(buf)) {
-        puts("[+] Серийный номер принят.");
+        puts("[+] Seriynyy nomer prinyat.");
         return 0;
     }
 
-    puts("[-] Неверный серийный номер.");
+    puts("[-] Nevernyy seriynyy nomer.");
     return 1;
 }

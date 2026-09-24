@@ -39,7 +39,7 @@ static unsigned char rotl8(unsigned char v, unsigned bits)
     return (unsigned char)((v << bits) | (v >> (8 - bits)));
 }
 
-/* Диспетчер виртуальной машины. Именно этот цикл ты увидишь в objdump. */
+/* Диспетчер виртуальной машины. Именно этот цикл ты увидишь в дизассемблере. */
 static int vm_run(const unsigned char *input)
 {
     unsigned char stack[STACK_SIZE];
@@ -108,7 +108,7 @@ int main(void)
 {
     char buf[64];
 
-    printf("Введите флаг: ");
+    printf("Vvedite flag: ");
     fflush(stdout);
 
     if (!fgets(buf, sizeof buf, stdin))
@@ -116,15 +116,15 @@ int main(void)
     buf[strcspn(buf, "\n")] = '\0';
 
     if (strlen(buf) != FLAG_LEN) {
-        puts("[-] Неверно.");
+        puts("[-] Neverno.");
         return 1;
     }
 
     if (vm_run((const unsigned char *)buf)) {
-        puts("[+] Верно. Флаг принят.");
+        puts("[+] Verno. Flag prinyat.");
         return 0;
     }
 
-    puts("[-] Неверно.");
+    puts("[-] Neverno.");
     return 1;
 }

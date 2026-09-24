@@ -1,65 +1,60 @@
-# Сборка учебных crackme.
+# Сборка учебных задач под Windows, в консоли w64devkit (глава 6).
 #
-# Флаги подобраны так, чтобы бинарник было ЛЕГЧЕ разбирать новичку:
-#   -O0                    без оптимизаций — код в ассемблере похож на исходник
-#   -no-pie                фиксированные адреса — в objdump и gdb они совпадают
-#   -fno-stack-protector   без защитных «канареек», меньше лишнего шума
+#   make          — собрать задачи в папку build/
+#   make hard     — «тяжёлый режим»: -O2 и без имён функций (-s),
+#                   как в настоящих программах. Для второго прохода.
+#   make test     — проверить, что задачи решаемы. СПОЙЛЕРЫ: в выводе ответы!
+#   make clean    — удалить собранное
 #
-# В реальной жизни всё наоборот: -O2, PIE, стрипнутые символы. Когда освоишь
-# базу — пересобери через `make hard` и почувствуй разницу.
+# Флаги подобраны так, чтобы новичку было ЛЕГЧЕ разбирать:
+#   -O0   без оптимизаций — ассемблер похож на исходник (глава 2)
+#
+# Задача 04 (анти-отладка) пока написана под Linux. Под Windows её
+# переделаем к главе 19, поэтому здесь её нет.
 
 CC      := gcc
-CFLAGS  := -O0 -no-pie -fno-stack-protector -Wall -Wextra
+CFLAGS  := -O0 -Wall -Wextra
 BUILD   := build
 SRC     := src
 
-NAMES   := 01_strings 02_xor 03_serial 04_antidebug 05_vm
-TARGETS := $(addprefix $(BUILD)/,$(NAMES))
-STRIPPED := $(addsuffix .stripped,$(TARGETS))
+NAMES   := 01_strings 02_xor 03_serial 05_vm
+TARGETS := $(addprefix $(BUILD)/,$(addsuffix .exe,$(NAMES)))
 
-.PHONY: all stripped hard clean test help
+.PHONY: all hard clean test help
 
 all: $(TARGETS)
 	@echo ""
-	@echo "Готово. Бинарники лежат в $(BUILD)/"
-	@echo "Начни с:  ./$(BUILD)/01_strings"
+	@echo "Gotovo. Programmy lezhat v $(BUILD)/"
+	@echo "Nachni s:  ./$(BUILD)/01_strings.exe"
 
 $(BUILD):
-	@mkdir -p $(BUILD)
+	mkdir -p $(BUILD)
 
-$(BUILD)/%: $(SRC)/%.c | $(BUILD)
+$(BUILD)/%.exe: $(SRC)/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $<
 
-# Версии без таблицы символов — имена функций не видны, как в реальном софте.
-stripped: $(STRIPPED)
+$(BUILD)/05_vm.exe: $(SRC)/05_vm_program.h
 
-$(BUILD)/%.stripped: $(BUILD)/%
-	cp $< $@
-	strip $@
-
-# «Тяжёлый режим»: оптимизация, PIE, без символов. Для второго прохода курса.
 hard: | $(BUILD)
 	@for n in $(NAMES); do \
-		$(CC) -O2 -pie -fPIE -s -o $(BUILD)/$$n.hard $(SRC)/$$n.c || exit 1; \
-		echo "  собрано $(BUILD)/$$n.hard"; \
+		$(CC) -O2 -s -o $(BUILD)/$$n.hard.exe $(SRC)/$$n.c || exit 1; \
+		echo "  sobrano $(BUILD)/$$n.hard.exe"; \
 	done
 
-# Проверка, что задачи вообще решаемы — прогоняем заведомо верные ответы.
-# ВНИМАНИЕ: содержит ответы. Не смотри в вывод, пока решаешь сам.
+# Проверка, что задачи вообще решаемы: прогоняем заведомо верные ответы.
+# ВНИМАНИЕ: здесь ответы. Не смотри, пока решаешь сам.
 test: all
-	@echo "== smoke-тест (спойлеры!) =="
-	@printf 'rev_is_fun_2024\n'      | ./$(BUILD)/01_strings    | tail -1
-	@printf 'xor_hides_nothing\n'    | ./$(BUILD)/02_xor        | tail -1
-	@printf 'RE-6685000-I\n'         | ./$(BUILD)/03_serial     | tail -1
-	@printf 'ptrace_is_not_enough\n' | ./$(BUILD)/04_antidebug  | tail -1
-	@printf 'vm_obfuscation\n'       | ./$(BUILD)/05_vm         | tail -1
+	@echo "== smoke-test (spoilers!) =="
+	@printf 'rev_is_fun_2024\n'   | ./$(BUILD)/01_strings.exe | tail -1
+	@printf 'xor_hides_nothing\n' | ./$(BUILD)/02_xor.exe     | tail -1
+	@printf 'RE-6685000-I\n'      | ./$(BUILD)/03_serial.exe  | tail -1
+	@printf 'vm_obfuscation\n'    | ./$(BUILD)/05_vm.exe      | tail -1
 
 clean:
 	rm -rf $(BUILD)
 
 help:
-	@echo "make          — собрать учебные бинарники"
-	@echo "make stripped — собрать версии без символов"
-	@echo "make hard     — собрать оптимизированные PIE-версии (сложный режим)"
-	@echo "make test     — проверить решаемость (СПОЙЛЕРЫ)"
-	@echo "make clean    — удалить собранное"
+	@echo "make       - sobrat zadachi"
+	@echo "make hard  - optimizirovannye versii bez imyon"
+	@echo "make test  - proverit reshaemost (SPOILERY)"
+	@echo "make clean - udalit sobrannoe"

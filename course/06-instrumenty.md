@@ -312,14 +312,21 @@ git clone https://github.com/Skillfast-vitaly/Studying-of-reverse-engineering .
 Если с Git пока не хочешь возиться — можно скачать архивом: на странице
 репозитория кнопка **Code** («Код») → **Download ZIP** («Скачать ZIP»).
 
-**Собери учебные задачи.** В папке `crackmes/` лежат исходники и Makefile.
-Но Makefile настроен под Linux-сборку. Под Windows с w64devkit собери
-вручную, например первую задачу:
+**Собери учебные задачи.** В папке `crackmes/` лежат исходники и Makefile —
+файл с правилами сборки. В w64devkit есть программа `make`, которая читает
+эти правила. Собрать всё разом:
 
 ```
 cd C:/reverse/course/crackmes
+make
+./build/01_strings.exe
+```
+
+Готовые `.exe` появятся в папке `crackmes/build/`. Можно собрать и одну
+задачу вручную, как любую свою программу:
+
+```
 gcc -O0 -o 01_strings.exe src/01_strings.c
-./01_strings.exe
 ```
 
 Программа попросит пароль. Пока не знаешь — введи что угодно, получишь отказ.

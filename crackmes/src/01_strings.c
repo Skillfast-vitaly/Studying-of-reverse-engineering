@@ -3,7 +3,8 @@
  *
  * Уровень:  вводный
  * Цель:     найти пароль, НЕ запуская программу
- * Изучаем:  секцию .rodata, утилиту strings, поиск строк в дизассемблере
+ * Изучаем:  секцию .rdata, поиск строк (Detect It Easy, x64dbg, Ghidra),
+ *           путь от строки к коду через перекрёстные ссылки
  *
  * Пароль лежит в бинарнике как есть. Так выглядит подавляющее большинство
  * «защит» в учебных задачах и, к сожалению, в некоторых реальных программах.
@@ -17,7 +18,7 @@ int main(void)
 {
     char buf[64];
 
-    printf("Введите пароль: ");
+    printf("Vvedite parol: ");
     fflush(stdout);
 
     if (!fgets(buf, sizeof buf, stdin))
@@ -25,10 +26,10 @@ int main(void)
     buf[strcspn(buf, "\n")] = '\0';
 
     if (strcmp(buf, SECRET) == 0) {
-        puts("[+] Верно. Доступ разрешён.");
+        puts("[+] Verno. Dostup razreshon.");
         return 0;
     }
 
-    puts("[-] Неверно.");
+    puts("[-] Neverno.");
     return 1;
 }

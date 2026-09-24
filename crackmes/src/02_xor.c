@@ -3,7 +3,7 @@
  *
  * Уровень:  начальный
  * Цель:     найти пароль статическим анализом
- * Изучаем:  почему strings перестаёт работать; чтение .rodata через objdump -s;
+ * Изучаем:  почему поиск строк перестаёт работать; чтение .rdata в hex;
  *           распознавание однобайтового XOR в дизассемблере
  *
  * Пароль хранится зашифрованным. Ключ лежит рядом — в коде функции
@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Зашифрованный пароль. strings этого уже не покажет. */
+/* Зашифрованный пароль. Поиск строк этого уже не покажет. */
 static const unsigned char ENC[] = {
     0x22, 0x35, 0x28, 0x05, 0x32, 0x33, 0x3e, 0x3f, 0x29,
     0x05, 0x34, 0x35, 0x2e, 0x32, 0x33, 0x34, 0x3d
@@ -35,7 +35,7 @@ int main(void)
     char buf[64];
     char secret[sizeof ENC + 1];
 
-    printf("Введите пароль: ");
+    printf("Vvedite parol: ");
     fflush(stdout);
 
     if (!fgets(buf, sizeof buf, stdin))
@@ -45,10 +45,10 @@ int main(void)
     decrypt(secret, sizeof ENC);
 
     if (strcmp(buf, secret) == 0) {
-        puts("[+] Верно. Доступ разрешён.");
+        puts("[+] Verno. Dostup razreshon.");
         return 0;
     }
 
-    puts("[-] Неверно.");
+    puts("[-] Neverno.");
     return 1;
 }
