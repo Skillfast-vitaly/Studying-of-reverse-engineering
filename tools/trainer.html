@@ -279,7 +279,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–17 и 26–28.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18 и 26–28.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -798,6 +798,73 @@
   ];
   MODES.loop17 = { label:"Цикл расшифровки", make:function(){ return qa(LOOPQ, "Что делает этот код?", "asm"); } };
 
+  /* ── гл. 18: разбор задачи 3, серийный номер ── */
+
+  function pad7(n){ var s = String(n); while(s.length < 7) s = "0"+s; return s; }
+  function letterOf(q){ return String.fromCharCode(65 + q % 26); }
+
+  MODES.serialok = { label:"Верный номер?",
+    make:function(){
+      var kind = ri(0,3), q = ri(0,7479), n = q*1337, s, why;
+      if(kind === 0){
+        s = "RE-"+pad7(n)+"-"+letterOf(q);
+        why = pad7(n)+" = "+q+" × 1337 — делится. Буква: 'A' + "+q+" % 26 = 'A' + "+(q%26)+" = '"+letterOf(q)+"'. Всё сходится — принят.";
+      } else if(kind === 1){
+        var other = String.fromCharCode(65 + (q + ri(1,25)) % 26);
+        s = "RE-"+pad7(n)+"-"+other;
+        why = pad7(n)+" = "+q+" × 1337 — условие 1 выполнено. Но буква должна быть 'A' + "+(q%26)+" = '"+letterOf(q)+"', а стоит '"+other+"'. Отказ на условии 2.";
+      } else if(kind === 2){
+        var m = n + ri(1,1336); if(m > 9999999) m = n - ri(1,1336);
+        if(m < 0) m = 1;
+        s = "RE-"+pad7(m)+"-"+letterOf(Math.floor(m/1337));
+        why = m+" / 1337 = "+Math.floor(m/1337)+", остаток "+(m%1337)+" — не ноль. Отказ на условии 1, до буквы дело не дойдёт.";
+      } else {
+        var bad = pick([
+          ["RE-"+pad7(n).slice(1)+"-"+letterOf(q), "длина 11, а нужно ровно 12 (cmp rax, 0xc)"],
+          ["RF-"+pad7(n)+"-"+letterOf(q), "второй символ должен быть 'E' (cmp al, 0x45)"],
+          ["RE-"+pad7(n).slice(0,3)+"O"+pad7(n).slice(4)+"-"+letterOf(q), "на месте цифры буква O — идиома «это цифра?» отсеет её"],
+          ["RE "+pad7(n)+"-"+letterOf(q), "на позиции 2 должен быть дефис (cmp al, 0x2d)"]
+        ]);
+        s = bad[0]; why = "Отказ ещё на формате: "+bad[1]+".";
+      }
+      var ans = kind===0 ? 0 : kind===3 ? 1 : kind===2 ? 2 : 3;
+      return { prompt:"Примет ли задача 03 этот номер?", kind:"code", value:s,
+        options:["принят","отказ: формат","отказ: число не делится на 1337","отказ: не та буква"], answer:ans,
+        why:why+" Правило: RE-NNNNNNN-C, N кратно 1337, C = 'A' + (N/1337) % 26 (глава 18)." };
+    } };
+
+  MODES.serialletter = { label:"Буква для номера",
+    make:function(){
+      var q = ri(0,7479), n = q*1337, r = q % 26;
+      var c = [r, (r+1)%26, (r+25)%26, (n%26)].filter(function(v,i,a){ return a.indexOf(v)===i; });
+      c = shuffle(fill4(c, function(s){ return (r + 3*s + 2) % 26; }));
+      return { prompt:"Какой буквой должен кончаться номер?", kind:"code", value:"RE-"+pad7(n)+"-?",
+        options:c.map(function(v){ return "<code>"+String.fromCharCode(65+v)+"</code>"; }), answer:c.indexOf(r),
+        why:"n = "+n+" = "+q+" × 1337, значит q = "+q+". "+q+" % 26 = "+r+" ("+q+" = 26 × "+Math.floor(q/26)+" + "+r+"). Буква 'A' + "+r+" = '"+String.fromCharCode(65+r)+"'. Ловушка — взять n % 26 вместо (n / 1337) % 26." };
+    } };
+
+  var MAGIC18 = [[0xCCCCCCCD,35,10],[0xCCCCCCCD,34,5],[0xAAAAAAAB,33,3],[0x4EC4EC4F,35,26],[0x10624DD3,38,1000],[0x51EB851F,37,100],[0x88888889,37,60]];
+  MODES.magicdiv = { label:"Магическое деление",
+    make:function(){
+      var it = pick(MAGIC18), d = it[2];
+      var ds = [3,5,10,26,60,100,1000,1337,7,16];
+      var c = shuffle([d].concat(shuffle(ds.filter(function(x){ return x!==d; })).slice(0,3)));
+      return { prompt:"Этот код делит беззнаковое число. На что?", kind:"asm",
+        value:"mov   edx, 0x"+hex(it[0]).toLowerCase()+"\nmov   eax, ecx\nimul  rax, rdx\nshr   rax, 0x"+hex(it[1]).toLowerCase(),
+        options:c.map(function(v){ return "<code>"+v+"</code>"; }), answer:c.indexOf(d),
+        why:"Делитель ≈ 2^сдвиг / множитель: 2^"+it[1]+" / 0x"+hex(it[0])+" ≈ "+d+". Умножение на большое число + сдвиг вправо — это деление, а не шифрование (глава 18)." };
+    } };
+
+  var IDIOM18 = [
+    ["sub eax, 0x30\ncmp eax, 9\njbe дальше", ["проверка «это цифра?»","вычитание 48 и сравнение с 9 как знаковых","проверка на пробел","умножение на 10"], 0, "0x30 — код '0'. Беззнаковое ≤ 9 пропускает только '0'…'9': всё ниже даёт огромное беззнаковое число (глава 18)."],
+    ["mov eax, edx\nshl eax, 2\nadd eax, edx\nadd eax, eax", ["eax = edx × 10","eax = edx × 4","eax = edx × 5","eax = edx + 10"], 0, "×4, +1 раз = ×5, удвоить = ×10. Так компилятор обходится без imul."],
+    ["lea eax, [rax+rdx-0x30]", ["eax = eax + символ − '0'","eax = адрес символа","eax = eax − 48, rdx не участвует","чтение из памяти"], 0, "lea — быстрая арифметика: сложить два регистра и вычесть 0x30 одной инструкцией (главы 10 и 18)."],
+    ["xor edx, edx\nmov ecx, 0x539\ndiv ecx", ["беззнаковое деление на 1337: частное в eax, остаток в edx","знаковое деление","обнуление и умножение","сравнение с 1337"], 0, "div делит EDX:EAX. xor edx, edx обнуляет старшую половину делимого. 0x539 = 1337."],
+    ["imul ecx, eax, 0x539\nmov eax, edx\nsub eax, ecx", ["остаток от деления на 1337","умножение на 1337","шифрование","сравнение"], 0, "n − q × 1337, где q = n / 1337, — это остаток. По такому куску и узнают делитель в магическом делении."],
+    ["call проверка\ntest eax, eax\nje отказ", ["функция проверки возвращает да/нет, 0 — отказ","сравнение двух строк","выход из программы","цикл"], 0, "Самая частая форма проверки: функция возвращает не ноль — принять, ноль — отказать (глава 18)."]
+  ];
+  MODES.idiom18 = { label:"Идиомы проверки", make:function(){ return qa(IDIOM18, "Что делает этот код?", "asm"); } };
+
   /* ───────── глава 27: кольца и ядро ───────── */
 
   var CS_REAL = [
@@ -1239,6 +1306,7 @@
     { id:"g1315",ch:"13–15", title:"x64dbg, Ghidra, наблюдение за поведением", modes:["keys","dbg","behave"], mix:"mix1315" },
     { id:"g16",  ch:"16",    title:"разбор задачи 1: пароль открытым текстом", modes:["off2rva","ptrle","chk16","num2txt"], mix:"mix16" },
     { id:"g17",  ch:"17",    title:"разбор задачи 2: пароль под XOR", modes:["xorb","xorkey","loop17"], mix:"mix17" },
+    { id:"g18",  ch:"18",    title:"разбор задачи 3: серийный номер", modes:["serialok","serialletter","magicdiv","idiom18"], mix:"mix18" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
