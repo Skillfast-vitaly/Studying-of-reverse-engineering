@@ -273,6 +273,20 @@ tools/             служебные скрипты: check_course.py, audit_ref
   главы 27–28, ревизия VIII, тренажёр для глав 26–28. Главу 29 начинай
   в новой сессии, с чистого листа, по документации Microsoft (WDK,
   пример драйвера, тестовая подпись в виртуальной машине).
+- В той же сессии после слияния в основную ветку глава 29 снова
+  оборвалась фильтром, два раза подряд. Её надо начинать в новой
+  сессии. Уже проверено по первоисточникам (сентябрь 2026):
+  Microsoft советует Visual Studio 2026 + WDK 28000.2526 (для VS 2022 —
+  WDK 26100.6584); для драйвера без устройства в документации Microsoft
+  описан шаблон «Empty WDM Driver» и `ntddk.h` (страница «Creating a New
+  Software Driver»); Visual Studio сама подписывает Debug-сборку тестовым
+  сертификатом (Driver Signing → Sign Mode: Test Sign); `bcdedit -set
+  TESTSIGNING ON` требует выключенной Secure Boot; сообщения
+  `DbgPrintEx` с уровнем `DPFLTR_ERROR_LEVEL` видны без правки реестра;
+  DebugView — v5.02 (июнь 2026); `sc.exe create имя type= kernel
+  binpath= путь`; Hyper-V есть только в Pro/Enterprise/Education, для
+  Home — VMware Workstation Pro 26H1 (бесплатна); Windows 11 Enterprise
+  для тестовой ВМ — ознакомительная на 90 дней (Evaluation Center).
 - 24.09.2026 ученик попросил: «не забывай про интерактивное обучение,
   тренажёр по каждой главе и практику». Тренажёр — артефакт
   https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf (ссылка в README).
