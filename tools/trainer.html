@@ -302,8 +302,25 @@
     </div>
   </details>
 
+  <details class="cheat">
+    <summary>Шпаргалка к главе 33 — рубильники и селекторы</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>регистр</th><th>бит</th><th>имя</th><th>если 1</th></tr>
+        <tr><td>CR0</td><td>0</td><td>PE</td><td class="t">защищённый режим</td></tr>
+        <tr><td>CR0</td><td>16</td><td>WP</td><td class="t">ядро соблюдает «только чтение»</td></tr>
+        <tr><td>CR0</td><td>31</td><td>PG</td><td class="t">страничная память</td></tr>
+        <tr><td>CR4</td><td>13</td><td>VMXE</td><td class="t">можно включить VT-x</td></tr>
+        <tr><td>CR4</td><td>20</td><td>SMEP</td><td class="t">ядру нельзя выполнять код программ</td></tr>
+        <tr><td>EFER</td><td>8 / 10</td><td>LME / LMA</td><td class="t">64-битный режим разрешён / работает</td></tr>
+        <tr><td>EFER</td><td>12</td><td>SVME</td><td class="t">можно включить AMD-V</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Селектор: index = s &gt;&gt; 3, RPL = s &amp; 3. <code>0x33</code> — запись 6, кольцо 3; <code>0x10</code> — запись 2, кольцо 0. <code>cpuid</code> лист 1: <code>ECX</code> бит 5 — VT-x, бит 31 — гость; лист <code>80000001</code> <code>ECX</code> бит 2 — AMD-V.</p>
+    </div>
+  </details>
+
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 26–28 и 32.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 26–28, 32 и 33.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -1466,6 +1483,126 @@
     }
   };
 
+  /* ── гл. 33: системные регистры ── */
+
+  var CRBITS33 = [
+    ["CR0", 0, "PE", "защищённый режим: кольца и защита"],
+    ["CR0", 16, "WP", "запрет записи в страницы «только чтение» действует и на ядро"],
+    ["CR0", 31, "PG", "страничная память включена"],
+    ["CR4", 5, "PAE", "записи таблиц страниц по 8 байт"],
+    ["CR4", 7, "PGE", "работает бит G — глобальные страницы в TLB"],
+    ["CR4", 12, "LA57", "пятиуровневые таблицы страниц"],
+    ["CR4", 13, "VMXE", "разрешено включить VT-x (vmxon)"],
+    ["CR4", 20, "SMEP", "ядру нельзя выполнять страницы программ"],
+    ["EFER", 0, "SCE", "работают syscall и sysret"],
+    ["EFER", 8, "LME", "разрешён 64-битный режим"],
+    ["EFER", 10, "LMA", "64-битный режим работает (ставит сам процессор)"],
+    ["EFER", 11, "NXE", "работает бит XD в таблицах страниц"],
+    ["EFER", 12, "SVME", "разрешено включить AMD-V (vmrun)"]
+  ];
+  MODES.crbits33 = {
+    label:"Биты CR и EFER",
+    make:function(){
+      var it = pick(CRBITS33);
+      var others = shuffle(CRBITS33.filter(function(x){ return x !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Что значит этот бит, если он равен 1?", kind:"code", value:it[0]+"."+it[2]+" (бит "+it[1]+")",
+        options:all.map(function(x){ return x[3]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"."+it[2]+"</code> — бит "+it[1]+" регистра <code>"+it[0]+"</code>: "+it[3]+". Таблицы — в разделах 33.2–33.4." };
+    }
+  };
+
+  var MSR33 = [
+    ["C0000080", "IA32_EFER — рубильники 64-битного режима и SVME"],
+    ["C0000081", "STAR — CS и SS для syscall и sysret"],
+    ["C0000082", "LSTAR — адрес обработчика syscall"],
+    ["C0000084", "FMASK — какие флаги сбросить при syscall"],
+    ["3A", "IA32_FEATURE_CONTROL — прошивка разрешила VT-x"],
+    ["480", "IA32_VMX_BASIC — что умеет VT-x"],
+    ["C0010114", "VM_CR — прошивка не запретила AMD-V"]
+  ];
+  MODES.msr33 = {
+    label:"Номера MSR",
+    make:function(){
+      var it = pick(MSR33);
+      var others = shuffle(MSR33.filter(function(x){ return x !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Что это за MSR?", kind:"code", value:"mov ecx, 0x"+it[0]+"\nrdmsr",
+        options:all.map(function(x){ return "<code>"+x[1].split(" — ")[0]+"</code> — "+x[1].split(" — ")[1]; }), answer:all.indexOf(it),
+        why:"Номер MSR кладут в <code>ECX</code>, результат приходит в <code>EDX:EAX</code>. <code>0x"+it[0]+"</code> — "+it[1]+". Номера на <code>C000…</code> придумала AMD. Таблица — раздел 33.4." };
+    }
+  };
+
+  var CPUID33 = [
+    ["Есть ли у процессора Intel VT-x?", ["лист 1, ECX, бит 5","лист 1, ECX, бит 31","лист 80000001, ECX, бит 2","лист 7, ECX, бит 16"], 0, "Лист 1, <code>ECX</code> бит 5 — VMX, то есть VT-x."],
+    ["Работает ли программа гостем под гипервизором?", ["лист 1, ECX, бит 31","лист 1, ECX, бит 5","лист 0, EBX","лист 80000008, EAX"], 0, "Бит 31 листа 1 настоящий процессор держит в 0, а гипервизоры по договорённости ставят в 1."],
+    ["Есть ли у процессора AMD-V?", ["лист 80000001, ECX, бит 2","лист 1, ECX, бит 5","лист 7, EBX, бит 7","лист 1, ECX, бит 31"], 0, "AMD-V (SVM) — лист <code>80000001</code>, <code>ECX</code> бит 2."],
+    ["Как узнать имя производителя процессора?", ["лист 0: EBX, EDX, ECX","лист 1: EAX","лист 40000000: EBX, ECX, EDX","лист 7: ECX"], 0, "Лист 0: 12 букв в <code>EBX</code>, <code>EDX</code>, <code>ECX</code> — именно в таком порядке."],
+    ["Как узнать имя гипервизора (например, «Microsoft Hv»)?", ["лист 40000000: EBX, ECX, EDX","лист 0: EBX, EDX, ECX","лист 80000002–80000004","лист 1: ECX"], 0, "Лист <code>40000000</code> — зона гипервизоров. Спрашивать только если бит 31 листа 1 равен 1."],
+    ["Есть ли пятиуровневые таблицы страниц?", ["лист 7, ECX, бит 16","лист 80000001, EDX, бит 26","лист 1, ECX, бит 5","лист 80000008, EAX"], 0, "LA57 — лист 7, <code>ECX</code> бит 16."],
+    ["Сколько битов в виртуальном адресе?", ["лист 80000008, EAX, биты 8–15","лист 80000008, EAX, биты 0–7","лист 1, EBX","лист 7, ECX"], 0, "Лист <code>80000008</code>: биты 0–7 <code>EAX</code> — физический адрес, 8–15 — виртуальный. Обычно 48."],
+    ["Почему гипервизор может соврать в ответе cpuid?", ["под гипервизором Intel cpuid всегда вызывает VM exit","cpuid читает память гипервизора","гипервизор меняет прошивку","cpuid — это системный вызов"], 0, "<code>cpuid</code> у Intel перехватывается всегда: гипервизор получает вопрос и отвечает сам. Так KVM спрятал VMX (раздел 33.5)."]
+  ];
+  MODES.cpuid33 = {
+    label:"Листы cpuid",
+    make:function(){ return qa(CPUID33, "Как спросить процессор?", "text"); }
+  };
+
+  var SEL33 = [0x10,0x18,0x23,0x2B,0x33,0x53];
+  MODES.sel33 = {
+    label:"Разбор селектора",
+    make:function(){
+      var s = Math.random() < 0.7 ? pick(SEL33) : (ri(1,40) << 3) | ri(0,3);
+      var q = ri(0,1), idx = s >> 3, rpl = s & 3;
+      var b = s.toString(2); while(b.length < 8) b = "0"+b;
+      var why = "<code>0x"+hex(s,2)+"</code> = <code>"+b.slice(0,5)+" "+b[5]+" "+b.slice(6)+"</code>: index = селектор &gt;&gt; 3 = "+idx+
+                ", TI = "+((s>>2)&1)+", RPL = селектор &amp; 3 = "+rpl+". Адрес дескриптора = база GDT + "+idx+" × 8.";
+      if(q === 0){
+        var cand = [idx];
+        [s, s >> 2, idx + 1].forEach(function(n){ if(cand.indexOf(n) < 0) cand.push(n); });
+        cand = shuffle(fill4(cand, function(k){ return idx + 2*k; }));
+        return { prompt:"Какой номер записи в GDT у этого селектора?", kind:"code", value:"0x"+hex(s,2),
+          options:cand.map(String), answer:cand.indexOf(idx), why:why };
+      }
+      return { prompt:"Для какого кольца этот селектор (RPL)?", kind:"code", value:"0x"+hex(s,2),
+        options:["Кольцо 0","Кольцо 1","Кольцо 2","Кольцо 3"], answer:rpl, why:why };
+    }
+  };
+
+  var VT33 = [
+    ["Что проверить ПЕРВЫМ перед включением VT-x?", ["cpuid: лист 1, ECX бит 5","CR4.VMXE","vmxon","EFER.SVME"], 0, "Сначала спросить процессор, умеет ли он VT-x. Потом прошивку, потом рубильник, потом vmxon (раздел 33.9)."],
+    ["Где прошивка Intel разрешает VT-x?", ["MSR IA32_FEATURE_CONTROL (3A)","CR0","EFER","GDT"], 0, "Бит 2 — «разрешить», бит 0 — замок. Замок закрыт с запретом — только настройка прошивки."],
+    ["Какой рубильник у Intel перед vmxon?", ["CR4.VMXE","EFER.SVME","CR0.PG","CR4.SMEP"], 0, "Бит 13 <code>CR4</code>. У AMD рубильник другой — <code>EFER.SVME</code>."],
+    ["Какой рубильник у AMD перед vmrun?", ["EFER.SVME","CR4.VMXE","CR0.WP","CR4.PAE"], 0, "Бит 12 MSR <code>EFER</code>. Код для Intel и AMD разный."],
+    ["Где прошивка AMD может запретить AMD-V?", ["MSR VM_CR, бит 4 SVMDIS","MSR IA32_FEATURE_CONTROL","CR4.VMXE","cpuid лист 0"], 0, "<code>VM_CR</code> (<code>C0010114</code>), бит 4 — «SVM запрещён»."],
+    ["Где в Windows увидеть, разрешила ли прошивка виртуализацию?", ["Диспетчер задач → Производительность → ЦП → Виртуализация","Блокнот → Справка","x64dbg → регистры","Панель управления → Звук"], 0, "Строка «Виртуализация: Включено / Отключено» в Диспетчере задач."],
+    ["Что гипервизор сохраняет в VMCS при переходе к гостю?", ["CR0, CR3, CR4, сегменты, GDTR, EFER, RIP, RSP","только RAX","только память гостя","только таблицы страниц гипервизора"], 0, "Все системные регистры гостя и гипервизора — глава 36."],
+    ["Программа в кольце 3 делает дальний переход на селектор 0x10. Что будет?", ["#GP — C0000005","переход в кольцо 0","ничего","синий экран"], 0, "DPL дескриптора 0x10 — 0, CPL — 3. Прямо в код ядра нельзя, только через LSTAR и IDT."]
+  ];
+  MODES.vt33 = {
+    label:"Путь к VT-x",
+    make:function(){ return qa(VT33, "Ключ зажигания", "text"); }
+  };
+
+  var TERMS33 = [
+    ["control register","управляющий регистр","контрóул рéджистер"], ["model-specific register","регистр, зависящий от модели (MSR)","мóдел спесúфик рéджистер"],
+    ["protected mode","защищённый режим","протéктид мóуд"], ["long mode","длинный (64-битный) режим","лонг мóуд"],
+    ["real mode","реальный режим","рил мóуд"], ["segment selector","сегментный селектор","сéгмент силéктор"],
+    ["segment descriptor","дескриптор сегмента","сéгмент дискрúптор"], ["global descriptor table","глобальная таблица дескрипторов","глóубал дискрúптор тейбл"],
+    ["intrinsic","встроенная функция компилятора","интрúнсик"], ["write protect","защита от записи","райт протéкт"]
+  ];
+  MODES.terms33 = {
+    label:"Термины регистров",
+    make:function(){
+      var it = pick(TERMS33);
+      var others = shuffle(TERMS33.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины главы — в GLOSSARY.md, раздел «Системные регистры»." };
+    }
+  };
+
   var GROUPS = [
     { id:"g02",  ch:"0–2",   title:"основы: закон, компьютер, путь к .exe", modes:["law","bits","build"], mix:"mix02" },
     { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","endian","ascii","signed"], mix:"mix3" },
@@ -1480,6 +1617,7 @@
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
     { id:"g32",  ch:"32",    title:"страничная память", modes:["idx32","entry32","pte32","canon32","pf32","cover32","terms32"], mix:"mix32" },
+    { id:"g33",  ch:"33",    title:"системные регистры", modes:["crbits33","msr33","cpuid33","sel33","vt33","terms33"], mix:"mix33" },
     { id:"gall", ch:"все",   title:"экзамен по всем главам и общий словарь", modes:["terms"], mix:"exam" }
   ];
   GROUPS.forEach(function(g){
