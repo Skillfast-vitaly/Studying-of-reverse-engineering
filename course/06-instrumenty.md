@@ -367,6 +367,8 @@ Detect It Easy — GCC или Microsoft Visual C++? А если бы ты соб
 
 > Ответы — в [ANSWERS.md](../ANSWERS.md).
 
+**Тренажёр.** Закрепи главу в [тренажёре](https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf): кнопка «6–8», режим «Какой инструмент».
+
 ---
 
 ## Что дальше

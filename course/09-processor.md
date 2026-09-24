@@ -423,6 +423,8 @@ if (length < MAX_SIZE)     // length объявлена как int (знаков
 
 > Ответы — в [ANSWERS.md](../ANSWERS.md).
 
+**Тренажёр.** Закрепи главу в [тренажёре](https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf): кнопка «9–12», режимы «Регистры и флаги» и «Условные переходы».
+
 ---
 
 ## Что дальше

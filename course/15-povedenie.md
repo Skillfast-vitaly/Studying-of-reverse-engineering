@@ -577,6 +577,8 @@ RegCreateKeyExW((HKEY)0xffffffff80000001,L"Software\\ReverseCourse",0,(LPWSTR)0x
 
 > Ответы — в [ANSWERS.md](../ANSWERS.md).
 
+**Тренажёр.** Закрепи главу в [тренажёре](https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf): кнопка «13–15», режим «Наблюдение».
+
 ---
 
 ## Что дальше

@@ -462,6 +462,8 @@ DLL Name: USER32.dll
 
 > Ответы — в [ANSWERS.md](../ANSWERS.md).
 
+**Тренажёр.** Закрепи главу в [тренажёре](https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf): кнопка «9–12», режимы «Volatile или нет» и «Функции WinAPI».
+
 ---
 
 ## Что дальше

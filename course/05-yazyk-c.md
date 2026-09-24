@@ -508,6 +508,8 @@ sum:
 
 > Ответы — в [ANSWERS.md](../ANSWERS.md).
 
+**Тренажёр.** Закрепи главу в [тренажёре](https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf): кнопка «4–5», режим «Читаем C».
+
 ---
 
 ## Что дальше

@@ -705,6 +705,8 @@ x64dbg загрузил программу по базе `00007FF6C9A20000`. П�
 
 > Ответы — в [ANSWERS.md](../ANSWERS.md).
 
+**Тренажёр.** Закрепи главу в [тренажёре](https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf): кнопка «13–15», режим «x64dbg и Ghidra».
+
 ---
 
 ## Что дальше
