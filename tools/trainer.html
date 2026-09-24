@@ -279,7 +279,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–15 и 26–28.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–16 и 26–28.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -683,6 +683,66 @@
     ["Где безопасно запускать чужую подозрительную программу для наблюдения?", ["только в виртуальной машине","на основном компьютере от администратора","на основном, но без интернета","где угодно, если есть антивирус"], 0, "Чужие программы — только в виртуальной машине (глава 15)."]
   ];
   MODES.behave = { label:"Наблюдение", make:function(){ return qa(PMQ, "Наблюдение за поведением"); } };
+
+  /* ── гл. 16: разбор задачи 1 ── */
+
+  var SECS16 = [ [".text",0x600,0x1000,0x6c38], [".data",0x7400,0x8000,0xd0], [".rdata",0x7600,0x9000,0xde0] ];
+  function secTable16(){ return "<br>таблица: <code>.text</code> 600→1000, <code>.data</code> 7400→8000, <code>.rdata</code> 7600→9000 (Raw Addr → Virtual Addr)"; }
+
+  MODES.off2rva = { label:"Смещение и RVA",
+    make:function(){
+      var s = pick([SECS16[1],SECS16[2],SECS16[2]]), d = ri(0, Math.min(s[3],0x200)-1), off = s[1]+d, rva = s[2]+d;
+      if(Math.random() < 0.5){
+        var c = shuffle([rva, off, s[2]+d+0x100, rva-s[1]+0x600].filter(function(v,i,a){ return a.indexOf(v)===i; }));
+        while(c.length<4){ var x = rva+0x10*c.length; if(c.indexOf(x)<0) c.push(x); }
+        return { prompt:"Смещение в файле 0x"+hex(off)+". Какой это RVA?", kind:"code", value:"0x"+hex(off)+" → RVA ?",
+          options:c.map(function(v){ return "<code>0x"+hex(v)+"</code>"; }), answer:c.indexOf(rva),
+          why:"Секция "+s[0]+": смещение "+hex(s[1])+"–… Внутри секции: 0x"+hex(off)+" − 0x"+hex(s[1])+" = 0x"+hex(d)+". RVA = 0x"+hex(s[2])+" + 0x"+hex(d)+" = <code>0x"+hex(rva)+"</code> (главы 8 и 16)."+secTable16() };
+      }
+      var c2 = shuffle([off, rva, off+0x1000, s[1]+d+0x200].filter(function(v,i,a){ return a.indexOf(v)===i; }));
+      while(c2.length<4){ var y = off+0x10*c2.length; if(c2.indexOf(y)<0) c2.push(y); }
+      return { prompt:"Ghidra показывает адрес 0x"+hex(0x140000000+rva)+". По какому смещению искать эти байты в HxD?", kind:"code", value:"0x"+hex(0x140000000+rva)+" → файл ?",
+        options:c2.map(function(v){ return "<code>0x"+hex(v)+"</code>"; }), answer:c2.indexOf(off),
+        why:"RVA = 0x"+hex(rva)+" — секция "+s[0]+". Внутри секции: 0x"+hex(rva)+" − 0x"+hex(s[2])+" = 0x"+hex(d)+". В файле: 0x"+hex(s[1])+" + 0x"+hex(d)+" = <code>0x"+hex(off)+"</code>."+secTable16() };
+    } };
+
+  MODES.ptrle = { label:"Указатель в данных",
+    make:function(){
+      var s = pick(SECS16), rva = s[2] + ri(0, 0x3f)*0x10, va = 0x140000000 + rva;
+      var b = []; for(var i=0;i<8;i++) b.push(hex(Math.floor(va/Math.pow(256,i)) % 256, 2));
+      var names = { ".text":"в код — это адрес функции", ".data":"в .data — на другую переменную", ".rdata":"в .rdata — скорее всего, на строку или константу" };
+      var opts = [".text",".data",".rdata"].map(function(n){ return "<code>0x"+hex(va)+"</code>, "+names[n]; });
+      var wrongNum = "<code>0x"+b.slice(0,4).join("")+"</code> — просто число";
+      opts.push(wrongNum);
+      var idx = [".text",".data",".rdata"].indexOf(s[0]);
+      return { prompt:"В секции .data лежат 8 байтов. Что это, если прочитать их как указатель?", kind:"code", value:b.join(" "),
+        options:opts, answer:idx,
+        why:"Разворачиваем little-endian: <code>"+b.slice().reverse().join(" ")+"</code> → <code>0x"+hex(va)+"</code>. RVA = 0x"+hex(rva)+" — это секция "+s[0]+" (глава 16, раздел 16.3). Байты вида <code>xx xx xx 40 01 00 00 00</code> — почти наверняка адрес внутри программы с базой 0x140000000."+secTable16() };
+    } };
+
+  var CHK16 = [
+    ["call strcmp\ntest eax, eax\njne  адрес_X", ["по адресу X — неудача: строки разные","по адресу X — успех: строки равны","X — начало strcmp","X — выход из программы при любом вводе"], 0, "strcmp возвращает 0 при равенстве. jne прыгает, когда НЕ ноль — то есть при разных строках. Значит, X — ветка неудачи (глава 16)."],
+    ["call strcmp\ntest eax, eax\nje   адрес_X", ["по адресу X — успех: строки равны","по адресу X — неудача","X — начало strcmp","X — проверка длины"], 0, "je прыгает при нуле, а strcmp даёт ноль при равенстве. X — ветка успеха."],
+    ["lea  rdx, [rip+0x7aa6]\nlea  rcx, [rbp-0x40]\ncall strcmp", ["эталон — сама строка; адрес вычислен lea","эталон берётся из переменной-указателя в .data","сравнивается длина строк","rdx — это ввод пользователя"], 0, "lea вычисляет адрес — строка лежит прямо по этому адресу (массив). Ввод — в RCX, эталон — в RDX (главы 12 и 16)."],
+    ["mov  rdx, qword ptr [rip+0x6aaa]\nlea  rcx, [rbp-0x40]\ncall strcmp", ["эталон берётся через указатель, лежащий в данных","эталон — сама строка, адрес вычислен","rdx — ввод пользователя","сравниваются числа, а не строки"], 0, "mov со скобками читает 8 байт из памяти — там лежит указатель на строку. Так выглядит const char *SECRET (раздел 16.3)."],
+    ["mov  r8d, 3\nmov  rdx, …\nmov  rcx, …\ncall strncmp", ["сравниваются только первые 3 символа — примет любой ввод с тем же началом","сравниваются 3 строки","пароль длиной ровно 3","сравнение без учёта регистра"], 0, "Третий аргумент strncmp в R8 — сколько символов сравнить. 3 — значит, проверяется только начало (упражнение 16.6)."],
+    ["mov  rax, 0x…\nxor  rax, qword ptr [rsp+0x20]\nor   rax, rdx\nje   адрес_X", ["встроенное сравнение: ноль — все байты совпали, X — успех","шифрование ввода","X — неудача","подсчёт длины строки"], 0, "xor одинаковых даёт 0, or объединяет две половины. Ноль — всё совпало. Так оптимизатор заменил strcmp (раздел 16.6)."]
+  ];
+  MODES.chk16 = { label:"Где проверка", make:function(){ return qa(CHK16, "Что делает этот фрагмент проверки?", "asm"); } };
+
+  var WORDS8 = ["password","not_here","rev_is_f","admin123","letmein!","qwerty12","sup3r_pw","hidden_k","flag{abc","key_2024"];
+  MODES.num2txt = { label:"Число → текст",
+    make:function(){
+      var w = pick(WORDS8), bytes = [];
+      for(var i=0;i<8;i++) bytes.push(w.charCodeAt(i));
+      var num = bytes.slice().reverse().map(function(c){ return hex(c,2); }).join("").toLowerCase();
+      var others = shuffle(WORDS8.filter(function(x){ return x!==w; })).slice(0,2);
+      var rev = w.split("").reverse().join("");
+      var opts = shuffle([w, rev].concat(others));
+      return { prompt:"Какой текст спрятан в числе из инструкции?", kind:"asm", value:"mov rax, 0x"+num,
+        options:opts.map(function(o){ return "<code>"+o.replace(/</g,"&lt;")+"</code>"; }), answer:opts.indexOf(w),
+        why:"Число хранится little-endian: младший байт первым. Разворачиваем <code>"+num.match(/../g).join(" ")+"</code> → <code>"+bytes.map(function(c){ return hex(c,2); }).join(" ")+"</code> → ASCII <code>"+w+"</code>. Ловушка — прочитать задом наперёд: <code>"+rev+"</code> (главы 3 и 16)." };
+    } };
 
   /* ───────── глава 27: кольца и ядро ───────── */
 
@@ -1123,6 +1183,7 @@
     { id:"g68",  ch:"6–8",   title:"инструменты, первое вскрытие, формат PE", modes:["tool","pe","rva"], mix:"mix68" },
     { id:"g912", ch:"9–12",  title:"язык машины: регистры, инструкции, стек, вызовы", modes:["regs","jumps","ins","frame","cc","api"], mix:"mix912" },
     { id:"g1315",ch:"13–15", title:"x64dbg, Ghidra, наблюдение за поведением", modes:["keys","dbg","behave"], mix:"mix1315" },
+    { id:"g16",  ch:"16",    title:"разбор задачи 1: пароль открытым текстом", modes:["off2rva","ptrle","chk16","num2txt"], mix:"mix16" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
