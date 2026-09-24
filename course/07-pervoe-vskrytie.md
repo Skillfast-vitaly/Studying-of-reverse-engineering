@@ -216,7 +216,7 @@ msvcrt.dll
 ### Собираем цель
 
 В консоли w64devkit (глава 6), в папке `C:\reverse\work\`, создай файл
-`secret.c` с таким содержимым:
+`secret.c` (`notepad secret.c`) с таким содержимым:
 
 ```c
 #include <stdio.h>
@@ -293,7 +293,8 @@ Otkazano.
 
 ### Шаг 4: проверка догадки
 
-Запусти `secret.exe` и введи `otkroysya_sezam`.
+Запусти `secret.exe` из консоли w64devkit (`./secret.exe`, глава 6) и введи
+`otkroysya_sezam`.
 
 ```
 Kodovoe slovo: otkroysya_sezam
