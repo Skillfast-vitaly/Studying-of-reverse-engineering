@@ -337,7 +337,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 26–28, 32–34 и приложения П1–П4.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–28, 32–34, 40 и приложения П1–П4.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -922,6 +922,115 @@
     ["call проверка\ntest eax, eax\nje отказ", ["функция проверки возвращает да/нет, 0 — отказ","сравнение двух строк","выход из программы","цикл"], 0, "Самая частая форма проверки: функция возвращает не ноль — принять, ноль — отказать (глава 18)."]
   ];
   MODES.idiom18 = { label:"Идиомы проверки", make:function(){ return qa(IDIOM18, "Что делает этот код?", "asm"); } };
+
+  /* ───────── глава 20: самодельная виртуальная машина ───────── */
+
+  function rotl8(v,n){ n &= 7; v &= 255; return n ? (((v << n) | (v >>> (8-n))) & 255) : v; }
+  function rotr8(v,n){ n &= 7; v &= 255; return n ? (((v >>> n) | (v << (8-n))) & 255) : v; }
+  function h2(v){ return "0x"+hex(v & 255, 2).toLowerCase(); }
+
+  MODES.vmrun20 = { label:"Выполни байт-код",
+    make:function(){
+      var a = ri(1,255), lines = ["PUSH  "+h2(a)], steps = [], x = a, noRot = a, k = ri(2,3);
+      for(var i=0;i<k;i++){
+        var t = ri(0,2);
+        if(t === 0){ var b = ri(1,255); lines.push("PUSH  "+h2(b)); lines.push("ADD");
+          steps.push(h2(x)+" + "+h2(b)+" = "+h2(x+b)+((x+b)>255 ? " (лишнее за 255 отброшено)" : ""));
+          x = (x+b) & 255; noRot = (noRot+b) & 255; }
+        else if(t === 1){ var c = ri(1,255); lines.push("PUSH  "+h2(c)); lines.push("XOR");
+          steps.push(h2(x)+" ^ "+h2(c)+" = "+h2(x^c)); x = x ^ c; noRot = noRot ^ c; }
+        else { var n = ri(1,7); lines.push("ROTL  "+n);
+          steps.push("rotl("+bin8(x)+", "+n+") = "+bin8(rotl8(x,n))+" = "+h2(rotl8(x,n)));
+          x = rotl8(x,n); noRot = (noRot << n) & 255; }
+      }
+      var opts = [x];
+      if(noRot !== x) opts.push(noRot);
+      opts.push(x ^ 0xFF);
+      opts = shuffle(fill4(opts.filter(function(v,i,s){ return s.indexOf(v)===i; }), function(s){ return (x + 37*s + 11) & 255; }).slice(0,4));
+      return { prompt:"Что окажется на вершине стека машины из задачи 05?", kind:"asm", value:lines.join("\n"),
+        options:opts.map(function(v){ return "<code>"+h2(v)+"</code>"; }), answer:opts.indexOf(x),
+        why:"По шагам: "+steps.join("; ")+". Команды с двумя числами снимают оба и кладут результат. Ловушки: вращение вместо сдвига (биты не теряются!) и забытое «по модулю 256» (глава 20, разделы 20.5 и 20.7)." };
+    } };
+
+  MODES.rot20 = { label:"Вращение битов",
+    make:function(){
+      var v = ri(1,254), n = ri(1,7), left = Math.random() < 0.5;
+      var r = left ? rotl8(v,n) : rotr8(v,n), other = left ? rotr8(v,n) : rotl8(v,n);
+      var shifted = left ? ((v << n) & 255) : (v >>> n);
+      var opts = [r, other, shifted].filter(function(x,i,s){ return s.indexOf(x)===i; });
+      opts = shuffle(fill4(opts, function(s){ return (r ^ (1 << (s % 8))) & 255; }));
+      return { prompt:"Посчитай "+(left?"rotl":"rotr")+"(x, "+n+") для байта x:", kind:"code",
+        value:"x = "+h2(v)+" = "+bin8(v),
+        options:opts.map(function(x){ return "<code>"+h2(x)+"</code> <code>"+bin8(x)+"</code>"; }), answer:opts.indexOf(r),
+        why:(left ? n+" левых бита уезжают за край и входят справа" : n+" правых бита уезжают за край и входят слева")+": "+bin8(v)+" → "+bin8(r)+". Обычный сдвиг ("+(left?"shl":"shr")+") дал бы "+bin8(shifted)+" — биты бы пропали. Вращение ничего не теряет, поэтому "+(left?"rotr":"rotl")+" на "+n+" вернёт исходный байт (глава 20)." };
+    } };
+
+  MODES.inv20 = { label:"Обрати проверку",
+    make:function(){
+      var i = ri(0,13), c = ri(0x61,0x7a), k = rotl8((c+i+1)&255, 3) ^ 0xA5;
+      var wrong1 = rotr8(((k ^ 0xA5) - (i+1)) & 255, 3);        /* не тот порядок */
+      var wrong2 = (rotl8(k ^ 0xA5, 3) - (i+1)) & 255;           /* не в ту сторону */
+      var wrong3 = (rotr8(k ^ 0xA5, 3) - i) & 255;                /* забыл +1 */
+      var opts = [c, wrong1, wrong2, wrong3].filter(function(x,j,s){ return s.indexOf(x)===j; });
+      opts = shuffle(fill4(opts, function(s){ return 0x61 + ((c - 0x61 + 5*s) % 26); }));
+      function show(x){ return (x >= 0x20 && x < 0x7f) ? "<code>"+String.fromCharCode(x)+"</code> ("+h2(x)+")" : "<code>"+h2(x)+"</code>"; }
+      var x1 = k ^ 0xA5, x2 = rotr8(x1, 3);
+      return { prompt:"Проверка задачи 05: rotl(in[i] + i + 1, 3) ^ 0xa5 == K. Какой символ in[i]?", kind:"code",
+        value:"i = "+i+",  K = "+h2(k),
+        options:opts.map(show), answer:opts.indexOf(c),
+        why:"Отменяем с конца: "+h2(k)+" ^ 0xa5 = "+h2(x1)+"; rotr(…, 3) = "+h2(x2)+"; − "+(i+1)+" = "+h2(c)+" = '"+String.fromCharCode(c)+"'. Порядок строго обратный: XOR → rotr → вычитание (раздел 20.8)." };
+    } };
+
+  MODES.jt20 = { label:"Таблица переходов",
+    make:function(){
+      var base = 0x140009000 + 8*ri(0x10,0x1F0), off = -ri(0x7000,0x7F00);
+      var entry = (off + 0x100000000), target = base + off;
+      var bytes = [entry & 255, (entry >>> 8) & 255, (entry >>> 16) & 255, (entry >>> 24) & 255].map(function(b){ return hex(b,2).toLowerCase(); }).join(" ");
+      var wrongU = base + entry;                  /* без знака */
+      var wrongP = base - off;                    /* прибавил модуль */
+      var rev = (((entry & 255) * 0x1000000) + ((entry >>> 8 & 255) << 16) + ((entry >>> 16 & 255) << 8) + (entry >>> 24 & 255));
+      var wrongE = base + (rev >= 0x80000000 ? rev - 0x100000000 : rev);   /* не тот порядок байтов */
+      var opts = [target, wrongU, wrongP, wrongE].filter(function(x,j,s){ return s.indexOf(x)===j; });
+      opts = shuffle(fill4(opts, function(s){ return target + 0x10*s; }));
+      return { prompt:"Начало таблицы переходов и одна её запись. Куда прыгнет jmp?", kind:"code",
+        value:"таблица: "+hex(base).toLowerCase()+"\nзапись:  "+bytes,
+        options:opts.map(function(x){ return "<code>"+hex(x).toLowerCase()+"</code>"; }), answer:opts.indexOf(target),
+        why:"Байты в little-endian: 0x"+hex(entry,8).toLowerCase()+". Старший бит 1 — число отрицательное: 0x"+hex(entry,8).toLowerCase()+" − 2^32 = −0x"+hex(-off).toLowerCase()+". Адрес = "+hex(base).toLowerCase()+" − 0x"+hex(-off).toLowerCase()+" = "+hex(target).toLowerCase()+". Код лежит раньше .rdata, поэтому расстояние отрицательное (раздел 20.4)." };
+    } };
+
+  MODES.len20 = { label:"Длина команд",
+    make:function(){
+      var bytes = [], names = [], cnt = ri(3,6);
+      for(var i=0;i<cnt;i++){
+        var op = ri(1,6);
+        if(op===1){ var v = ri(1,7); bytes.push(1, v); names.push("PUSH "+h2(v)); }
+        else if(op===2){ var j = ri(1,7); bytes.push(2, j); names.push("LOAD in["+j+"]"); }
+        else if(op===5){ var n = ri(1,7); bytes.push(5, n); names.push("ROTL "+n); }
+        else { bytes.push(op); names.push(["","","","XOR","ADD","","EQ"][op]); }
+      }
+      bytes.push(7); names.push("HALT"); cnt++;
+      var opts = [cnt, bytes.length, cnt-1, cnt+1].filter(function(x,j,s){ return x>0 && s.indexOf(x)===j; });
+      opts = shuffle(fill4(opts, function(s){ return cnt + 1 + s; }));
+      return { prompt:"Сколько команд машины в этих байтах (коды 01, 02, 05 — по 2 байта, остальные — по 1)?", kind:"code",
+        value:bytes.map(function(b){ return hex(b,2); }).join(" "),
+        options:opts.map(String), answer:opts.indexOf(cnt),
+        why:"Разбор: "+names.join(" · ")+" — "+cnt+" команд. Операнды (байты после 01, 02, 05) — не команды, хотя выглядят такими же маленькими числами. Если бы ты принял операнд за код операции, дизассемблер пошёл бы вразнос (раздел 20.6)." };
+    } };
+
+  var TERMS20 = [
+    ["interpreter","интерпретатор","интёрпретер"], ["bytecode","байт-код","бáйткоуд"], ["opcode","код операции","óпкод"],
+    ["operand","операнд","óперанд"], ["handler","обработчик","хэ́ндлер"], ["dispatcher","диспетчер","диспэ́чер"],
+    ["jump table","таблица переходов","джамп тэйбл"], ["instruction set","система команд","инстрáкшен сет"],
+    ["rotate left","вращение влево","рóутейт лефт"], ["tracer","трассировщик","трэ́йсер"], ["emulator","эмулятор","э́мьюлейтер"],
+    ["stack machine","стековая машина","стэк машúн"]
+  ];
+  MODES.terms20 = { label:"Слова главы",
+    make:function(){
+      var it = pick(TERMS20), others = shuffle(TERMS20.filter(function(t){ return t!==it; })).slice(0,3), all = shuffle([it].concat(others));
+      return { prompt:"Как переводится термин?", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «Интерпретаторы и байт-код»." };
+    } };
 
   /* ───────── глава 27: кольца и ядро ───────── */
 
@@ -2018,6 +2127,39 @@
   ];
   MODES.bookp4 = { label:"Где искать", make:function(){ return qa(BOOKP4, "Документация Intel и AMD", "text"); } };
 
+  /* ── глава 40: профессия реверсера ── */
+
+  var PROF40 = [
+    ["Получает подозрительный файл, выясняет, что он делает, пишет отчёт и сигнатуры", 0, "Вирусный аналитик — самый прямой вход в профессию для начинающего (раздел 40.2)."],
+    ["Ищет ошибки в браузерах, драйверах и системах и сообщает производителю", 1, "Исследователь уязвимостей. Девиз профессии — правило главы 28: всё из кольца 3 — враг."],
+    ["Пишет антивирусы, EDR, песочницы, античит — часто в ядре", 2, "Инженер средств защиты: основная работа — разработка, реверс — чтобы понимать противника."],
+    ["Разрабатывает Hyper-V, VMware, KVM и облачные платформы", 3, "Инженер виртуализации — ближе всего к твоей мечте, но вакансий меньше всего."],
+    ["По договору проверяет защиту сети компании и пишет отчёт", 4, "Пентестер. Реверса в работе меньше, зато хороший вход в безопасность."]
+  ];
+  MODES.prof40 = { label:"Кто чем занят",
+    make:function(){ return fixed(PROF40, "Какая это профессия?", "text", ["вирусный аналитик","исследователь уязвимостей","инженер средств защиты","инженер виртуализации","пентестер"]); } };
+
+  var ASK40 = [
+    ["Что происходит, когда программа вызывает CreateFileW? Проследи до ядра", ["главы 12 и 28","глава 8","глава 32","глава 3"], 0, "kernel32 → kernelbase → ntdll (заглушка, syscall) → KiSystemCall64 → NtCreateFile в ntoskrnl (главы 12, 28)."],
+    ["Чем процесс отличается от потока?", ["глава 26","глава 13","глава 34","глава 17"], 0, "Процесс — контейнер (память, дескрипторы), поток — исполнитель (регистры, стек). Глава 26."],
+    ["Как виртуальный адрес становится физическим?", ["глава 32","глава 8","глава 28","глава 5"], 0, "Четыре уровня таблиц от CR3, индексы по 9 битов. Глава 32."],
+    ["Как работает программная точка останова?", ["главы 13 и 34","глава 26","глава 32","глава 8"], 0, "Байт CC — int3 — вектор 3, ловушка; отладчик возвращает байт и сдвигает RIP (главы 13, 34)."],
+    ["Как устроен формат PE? Что такое RVA?", ["глава 8","глава 26","глава 33","глава 12"], 0, "Заголовки, секции, импорты; RVA = адрес − база образа. Глава 8."],
+    ["Чем kernel mode отличается от user mode?", ["глава 27","глава 5","глава 16","глава 3"], 0, "Кольца 0 и 3, два младших бита CS, привилегированные инструкции. Глава 27."]
+  ];
+  MODES.ask40 = { label:"Вопросы собеседования", make:function(){ return qa(ASK40, "Где в курсе ответ?", "text"); } };
+
+  var LAW40 = [
+    ["Пентестер ломает сеть компании, с которой у него подписан договор", 0, "Договор с владельцем делает это законным. Без договора — преступление (раздел 40.8)."],
+    ["Участник bug bounty проверяет продукт строго по правилам программы", 0, "Законный заработок и строчка в портфолио — пока соблюдаешь правила."],
+    ["Нашёл уязвимость и сразу выложил подробности в интернет", 1, "Правило ответственного раскрытия: сначала производителю, публично — после исправления."],
+    ["Положил в портфолио разбор снятия защиты с коммерческой программы", 1, "В портфолио — только своё и законное. Работодатель в безопасности смотрит на это первым делом."],
+    ["Рассказал друзьям подробности уязвимости клиента, закрытой NDA", 1, "Нарушение соглашения о неразглашении — конец карьеры: здесь репутация решает всё."],
+    ["Выложил на GitHub разбор учебной задачи с crackmes.one", 0, "Задачи там выложены, чтобы их разбирали. Хорошее портфолио."]
+  ];
+  MODES.law40 = { label:"Закон в работе",
+    make:function(){ return fixed(LAW40, "Так можно?", "text", ["можно","нельзя"]); } };
+
   var GROUPS = [
     { id:"g02",  ch:"0–2",   title:"основы: закон, компьютер, путь к .exe", modes:["law","bits","build"], mix:"mix02" },
     { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","endian","ascii","signed"], mix:"mix3" },
@@ -2028,6 +2170,7 @@
     { id:"g16",  ch:"16",    title:"разбор задачи 1: пароль открытым текстом", modes:["off2rva","ptrle","chk16","num2txt"], mix:"mix16" },
     { id:"g17",  ch:"17",    title:"разбор задачи 2: пароль под XOR", modes:["xorb","xorkey","loop17"], mix:"mix17" },
     { id:"g18",  ch:"18",    title:"разбор задачи 3: серийный номер", modes:["serialok","serialletter","magicdiv","idiom18"], mix:"mix18" },
+    { id:"g20",  ch:"20",    title:"разбор задачи 5: самодельная виртуальная машина", modes:["vmrun20","rot20","inv20","jt20","len20","terms20"], mix:"mix20" },
     { id:"gp1",  ch:"П1",    title:"приложение: Си — от чтения к письму", modes:["typesp1","recipep1","maskp1","structp1","termsp1"], mix:"mixp1" },
     { id:"gp2",  ch:"П2",    title:"приложение: ассемблер — пишем сами", modes:["regsp2","alignp2","masmp2","bugp2","termsp2"], mix:"mixp2" },
     { id:"gp3",  ch:"П3",    title:"приложение: гонки и блокировки", modes:["racep3","atomp3","rulesp3","cachep3","termsp3"], mix:"mixp3" },
@@ -2038,6 +2181,7 @@
     { id:"g32",  ch:"32",    title:"страничная память", modes:["idx32","entry32","pte32","canon32","pf32","cover32","terms32"], mix:"mix32" },
     { id:"g33",  ch:"33",    title:"системные регистры", modes:["crbits33","msr33","cpuid33","sel33","vt33","terms33"], mix:"mix33" },
     { id:"g34",  ch:"34",    title:"прерывания", modes:["vec34","kind34","gate34","stack34","dpl34","terms34"], mix:"mix34" },
+    { id:"g40",  ch:"40",    title:"профессия реверсера", modes:["prof40","ask40","law40"], mix:"mix40" },
     { id:"gall", ch:"все",   title:"экзамен по всем главам и общий словарь", modes:["terms"], mix:"exam" }
   ];
   GROUPS.forEach(function(g){
