@@ -85,6 +85,7 @@
 - [ ] HxD
 - [ ] x64dbg
 - [ ] Ghidra (+ JDK)
+- [ ] Process Monitor и Process Explorer (Sysinternals)
 
 ---
 

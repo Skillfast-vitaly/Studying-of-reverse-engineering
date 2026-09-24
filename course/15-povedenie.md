@@ -251,7 +251,7 @@ Press Enter to exit
 и ждёт Enter. Нажми Enter в её окне — строка `CloseFile` появится.
 
 **Запусти программу второй раз.** Теперь `RegQueryValue` вернёт `SUCCESS`
-с `Data: 1`, а записано будет уже `Data: 2`. Процмон показывает то, что
+с `Data: 1`, а записано будет уже `Data: 2`. Procmon показывает и то, что
 программа прочитала, и то, что записала.
 
 ### Главный приём: `NAME NOT FOUND`
@@ -268,8 +268,8 @@ Press Enter to exit
 touch config.ini
 ```
 
-и запусти программу снова (`./behave.exe`). Она скажет `Found config.ini`, а в Procmon
-у `CreateFile` будет `SUCCESS`. Ты изменил поведение программы, не
+и запусти программу снова (`./behave.exe`). Она скажет `Found config.ini`,
+а в Procmon у `CreateFile` будет `SUCCESS`. Ты изменил поведение программы, не
 заглянув в её код, — только подсмотрев, что она ищет.
 
 Отсюда рабочий приём: **отфильтруй `Result` → `is` → `NAME NOT FOUND`**
