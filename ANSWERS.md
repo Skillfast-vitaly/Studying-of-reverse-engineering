@@ -3425,3 +3425,175 @@ AMD, и его виртуализация называется AMD-V (SVM). Дл
 самые коварные. Поэтому у Microsoft есть Driver Verifier — инструмент,
 который нарочно выгружает память драйвера, чтобы такие ошибки
 проявлялись сразу. Им мы воспользуемся в части IX.
+
+---
+
+## Приложение П1. Си: от чтения к письму
+
+### П1.1. Размеры
+
+| Значение | Тип | Почему |
+|---|---|---|
+| а) `CR3` | `uint64_t` | регистр 64-битный, в нём физический адрес |
+| б) селектор `CS` | `uint16_t` | селектор — 16 битов (глава 33) |
+| в) байт шифра | `uint8_t` | ровно байт, без знака (глава 17) |
+| г) половинка MSR в `EAX` | `uint32_t` | `EAX` — 32 бита |
+| д) результат `sizeof` | `size_t` | так его объявляет язык; печатать через `(unsigned long long)` и `%llu` |
+
+Ловушка — выбрать `long` для а): в Windows он 4 байта, и старшая
+половина `CR3` пропала бы.
+
+### П1.2. Рецепты
+
+```c
+cr4 |= 1ULL << 13;                  // а) поставить VMXE
+pte &= ~(1ULL << 1);                // б) снять R/W
+if (efer & (1ULL << 12)) { ... }    // в) есть ли SVME
+uint64_t pd = (va >> 21) & 0x1FF;   // г) индекс PD
+```
+
+Проверь себя по г): сдвиги индексов — 39, 30, **21**, 12 (глава 32,
+раздел 32.5). Маска `0x1FF` — девять единиц.
+
+### П1.3. Найди ошибку
+
+`1` — это `int`, 32 бита. Сдвиг на 63 выходит за его ширину: результат
+не определён, и бит 63 так не поставить. Исправление: **`pte |= 1ULL << 63;`**
+
+Компилятор для Windows с `-Wall` скажет (я проверил):
+
+```
+warning: left shift count >= width of type [-Wshift-count-overflow]
+```
+
+«Величина сдвига больше или равна ширине типа». Если видишь это
+предупреждение — почти наверняка забыт суффикс `ULL`.
+
+### П1.4. Выравнивание
+
+`struct C { char a; uint64_t b; char c; };` — **24 байта**:
+
+```
+a — смещение 0   (1 байт, потом 7 пустых: b должен начаться с кратного 8)
+b — смещение 8   (8 байт)
+c — смещение 16  (1 байт, потом 7 пустых: размер кратен 8)
+```
+
+Переставим: `struct D { uint64_t b; char a; char c; };` — **16 байт**:
+`b` на 0, `a` на 8, `c` на 9 и 6 пустых байт в конце. Правило: **большие
+поля — первыми**, мелкие — в конец, тогда дырок меньше.
+
+Проверочная программа (числа выше — её настоящий вывод):
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
+
+struct C { char a; uint64_t b; char c; };
+struct D { uint64_t b; char a; char c; };
+
+int main(void)
+{
+    printf("C: size %llu, a %llu, b %llu, c %llu\n",
+           (unsigned long long)sizeof(struct C),
+           (unsigned long long)offsetof(struct C, a),
+           (unsigned long long)offsetof(struct C, b),
+           (unsigned long long)offsetof(struct C, c));
+    printf("D: size %llu\n", (unsigned long long)sizeof(struct D));
+    return 0;
+}
+```
+
+### П1.5. Своя запись
+
+В `pte.h`:
+
+```c
+typedef union {
+    uint16_t value;
+    struct {
+        uint16_t rpl   : 2;    // биты 0–1
+        uint16_t ti    : 1;    // бит 2
+        uint16_t index : 13;   // биты 3–15
+    } bits;
+} SELECTOR;
+```
+
+В `main.c`:
+
+```c
+_Static_assert(sizeof(SELECTOR) == 2, "SELECTOR must be 2 bytes");
+
+void show(uint16_t v)
+{
+    SELECTOR s;
+    s.value = v;
+    printf("selector %04X: index %u, ti %u, rpl %u\n",
+           s.value, s.bits.index, s.bits.ti, s.bits.rpl);
+}
+```
+
+и вызовы `show(0x33); show(0x10);`. Вывод:
+
+```
+selector 0033: index 6, ti 0, rpl 3
+selector 0010: index 2, ti 0, rpl 0
+```
+
+Совпадает с разбором в главе 33: запись 6 GDT, кольцо 3 — код программ;
+запись 2, кольцо 0 — код ядра. Обрати внимание: поля объявлены
+**`uint16_t`**, а не `uint64_t`, — иначе объединение раздулось бы
+до 8 байт, и `_Static_assert` это поймал бы.
+
+### П1.6. Таблица обработчиков
+
+```c
+void on_negative(int value) { printf("negative: %d\n", -value); }
+
+HANDLER table[] = { on_hello, on_double, on_square, on_negative };
+```
+
+В проверке границ менять **ничего не нужно**: `COUNT` вычисляется
+через `sizeof(table) / sizeof(table[0])` и сам стал 4. В этом и смысл
+такой записи. Если бы границу написали числом `3`, новый обработчик
+никогда бы не вызвался — и такую ошибку легко не заметить.
+
+### П1.7. Проект дальше
+
+Один из вариантов `main.c`:
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include "pte.h"
+
+int main(int argc, char **argv)
+{
+    int verbose = 0, first = 1, ok = 0, bad = 0;
+
+    if (argc > 1 && strcmp(argv[1], "-v") == 0) {
+        verbose = 1;
+        first = 2;                  // записи начинаются со второго аргумента
+    }
+    for (int i = first; i < argc; i++) {
+        PTE e;
+        if (pte_parse(argv[i], &e)) {
+            pte_print(e);
+            ok++;
+        } else {
+            printf("not a hex number: %s\n", argv[i]);
+            bad++;
+        }
+    }
+    if (verbose)
+        printf("parsed: %d, errors: %d\n", ok, bad);
+    return 0;
+}
+```
+
+Ход мысли: ключ стоит **первым**, значит, проверяем только `argv[1]`
+и, если это `-v`, начинаем разбор с `argv[2]`. `strcmp` возвращает 0
+при равенстве (глава 5) — отсюда `== 0`. Сборку без аргументов (где
+программа строила запись сама) можно оставить: добавь её снова в начало,
+если хочешь сохранить.

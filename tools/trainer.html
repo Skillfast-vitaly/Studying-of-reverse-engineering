@@ -337,7 +337,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 26–28 и 32–34.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 26–28, 32–34 и приложение П1.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -1724,6 +1724,82 @@
     }
   };
 
+  /* ── приложение П1: Си — от чтения к письму ── */
+
+  var TYPESP1 = [
+    ["Сколько байт занимает long в 64-битной Windows?", ["4","8","2","16"], 0, "Модель LLP64: в Windows <code>long</code> — 4 байта, в Linux — 8. Для адресов бери <code>uint64_t</code>."],
+    ["Какой тип взять для содержимого CR3?", ["uint64_t","long","int","uint32_t"], 0, "Регистр 64-битный. <code>long</code> в Windows обрежет его до 32 битов."],
+    ["Какой тип взять для селектора CS?", ["uint16_t","uint64_t","uint8_t","long long"], 0, "Селектор — 16 битов (глава 33)."],
+    ["Сколько байт в ULONG?", ["4","8","2","зависит от компьютера"], 0, "«U-LONG», но в Windows это 4 байта, как и <code>long</code>. 8 байт — <code>ULONG64</code>."],
+    ["Какой тип Windows равен uint64_t?", ["ULONG64","ULONG","DWORD","USHORT"], 0, "<code>ULONG64</code>, <code>UINT64</code>, <code>ULONGLONG</code> — 8 байт."],
+    ["Что значит «_t» в uint32_t?", ["это тип (type)","это временная переменная","это указатель","это таблица"], 0, "Суффикс <code>_t</code> — соглашение: «это имя типа»."],
+    ["Как надёжно напечатать uint64_t в hex?", ["printf(\"%llX\", (unsigned long long)x)","printf(\"%X\", x)","printf(\"%d\", x)","printf(\"%s\", x)"], 0, "Формат <code>%ll…</code> ждёт <code>long long</code> — приведение держит это обещание на любом компиляторе."]
+  ];
+  MODES.typesp1 = { label:"Типы и размеры", make:function(){ return qa(TYPESP1, "Типы точного размера", "text"); } };
+
+  MODES.recipep1 = {
+    label:"Рецепты с битами",
+    make:function(){
+      var ops = [
+        ["поставить", function(v,n){ return v+" |= 1ULL << "+n+";"; }],
+        ["снять", function(v,n){ return v+" &= ~(1ULL << "+n+");"; }],
+        ["перевернуть", function(v,n){ return v+" ^= 1ULL << "+n+";"; }],
+        ["проверить", function(v,n){ return "if ("+v+" & (1ULL << "+n+"))"; }]
+      ];
+      var names = [["cr4",13,"VMXE"],["cr0",16,"WP"],["cr0",31,"PG"],["efer",12,"SVME"],["pte",0,"P"],["pte",1,"R/W"],["pte",63,"XD"],["efer",11,"NXE"]];
+      var t = pick(names), k = ri(0,3);
+      var opts = ops.map(function(o){ return "<code>"+o[1](t[0],t[1]).replace(/&/g,"&amp;").replace(/</g,"&lt;")+"</code>"; });
+      return { prompt:"Какая строка "+ops[k][0]+" бит "+t[2]+" ("+t[1]+") в "+t[0]+"?", kind:"text", value:ops[k][0]+" "+t[0]+"."+t[2],
+        options:opts, answer:k,
+        why:"Рецепты: поставить <code>|= 1ULL &lt;&lt; n</code>, снять <code>&amp;= ~(1ULL &lt;&lt; n)</code>, перевернуть <code>^=</code>, проверить <code>&amp;</code>. <code>ULL</code> обязателен: <code>1</code> — 32-битный int (раздел П1.2)." };
+    }
+  };
+
+  MODES.maskp1 = {
+    label:"Маска на n битов",
+    make:function(){
+      var n = pick([3,4,8,9,12,13,16,20,32,40]);
+      var right = (1n << BigInt(n)) - 1n;
+      var cand = [right];
+      [(1n << BigInt(n)), (1n << BigInt(n-1)) - 1n, (1n << BigInt(n+1)) - 1n].forEach(function(x){ if(cand.indexOf(x) < 0) cand.push(x); });
+      cand = shuffle(cand);
+      return { prompt:"Маска, в которой ровно n младших битов — единицы. Какая?", kind:"code", value:"n = "+n,
+        options:cand.map(function(x){ return "<code>0x"+x.toString(16).toUpperCase()+"</code>"; }), answer:cand.indexOf(right),
+        why:"Маска = <code>(1ULL &lt;&lt; "+n+") - 1</code> = <code>0x"+right.toString(16).toUpperCase()+"</code>. Каждая hex-цифра <code>F</code> — 4 единицы"+(n%4 ? ", а неполная первая цифра добирает остаток" : "")+". Примеры из курса: 9 битов — <code>0x1FF</code> (индекс таблицы), 12 — <code>0xFFF</code> (смещение), 40 — <code>0xFFFFFFFFFF</code> (номер страницы)." };
+    }
+  };
+
+  var STRUCTP1 = [
+    ["p — указатель на структуру. Как прочитать поле age?", ["p-&gt;age","p.age","*p-&gt;age","&amp;p.age"], 0, "<code>p-&gt;age</code> — то же, что <code>(*p).age</code>. Через точку — только когда у тебя сама структура."],
+    ["struct { char c; int i; char d; } — сколько байт?", ["12","6","8","9"], 0, "После <code>c</code> три пустых байта, чтобы <code>i</code> стоял на 4; в конце ещё три. Проверено компилятором для Windows."],
+    ["Зачем структуры передают по указателю?", ["не копировать всё и уметь менять оригинал","так быстрее компилируется","иначе нельзя","чтобы работал printf"], 0, "Копия большой структуры дорогая, а изменения копии теряются. Если функция только читает — <code>const</code>."],
+    ["Сколько места занимает union { uint64_t value; struct {...64 бита...} bits; }?", ["8 байт","16 байт","зависит от числа полей","1 байт"], 0, "Все поля объединения лежат в одном месте; размер — самое большое поле."],
+    ["Зачем _Static_assert(sizeof(PTE) == 8, ...)?", ["остановить сборку, если размер не совпал","ускорить программу","выделить память","проверить при запуске"], 0, "Проверка во время сборки: ошибка раскладки найдена до запуска, а не синим экраном."],
+    ["Что значит «undefined reference to `pte_print'»?", ["компоновщик не нашёл тело функции — забыт .c файл","ошибка в printf","функция вызвана без аргументов","в функции деление на ноль"], 0, "Прототип есть, тела нет. Проверь, все ли <code>.c</code> в команде сборки."],
+    ["Что значит static перед функцией в .c файле?", ["видна только внутри этого файла","вызывается один раз","работает быстрее","лежит в стеке"], 0, "Так прячут вспомогательные функции от остальной программы."],
+    ["Как в машинном коде выглядит вызов table[reason](value)?", ["call rdx — косвенный вызов по адресу из регистра","call table","jmp reason","ret"], 0, "Адрес берётся из таблицы: база + reason × 8, затем <code>call</code> регистра. Ghidra стрелку не нарисует — смотри в отладчике."]
+  ];
+  MODES.structp1 = { label:"Структуры и файлы", make:function(){ return qa(STRUCTP1, "Пишем на C", "text"); } };
+
+  var TERMSP1 = [
+    ["fixed-width type","тип точного размера","фикст видс тайп"], ["bit mask","битовая маска","бит маск"],
+    ["padding","выравнивание (набивка)","пэ́ддинг"], ["bit field","битовое поле","бит филд"],
+    ["union","объединение","ю́ньон"], ["prototype","прототип функции","прóутотайп"],
+    ["header","заголовочный файл","хéдер"], ["function pointer","указатель на функцию","фáнкшен пóйнтер"],
+    ["indirect call","косвенный вызов","индирéкт кол"], ["warning","предупреждение компилятора","вóрнинг"]
+  ];
+  MODES.termsp1 = {
+    label:"Термины Си",
+    make:function(){
+      var it = pick(TERMSP1);
+      var others = shuffle(TERMSP1.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «Си для системного программиста»." };
+    }
+  };
+
   var GROUPS = [
     { id:"g02",  ch:"0–2",   title:"основы: закон, компьютер, путь к .exe", modes:["law","bits","build"], mix:"mix02" },
     { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","endian","ascii","signed"], mix:"mix3" },
@@ -1734,6 +1810,7 @@
     { id:"g16",  ch:"16",    title:"разбор задачи 1: пароль открытым текстом", modes:["off2rva","ptrle","chk16","num2txt"], mix:"mix16" },
     { id:"g17",  ch:"17",    title:"разбор задачи 2: пароль под XOR", modes:["xorb","xorkey","loop17"], mix:"mix17" },
     { id:"g18",  ch:"18",    title:"разбор задачи 3: серийный номер", modes:["serialok","serialletter","magicdiv","idiom18"], mix:"mix18" },
+    { id:"gp1",  ch:"П1",    title:"приложение: Си — от чтения к письму", modes:["typesp1","recipep1","maskp1","structp1","termsp1"], mix:"mixp1" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },

@@ -25,11 +25,10 @@ for m in re.finditer(r"### Часть ([IVX]+)\.\s*(.+)", readme):
 
 print(f"В карте курса: {len(chapters)} глав, {len(parts)} частей\n")
 
-written = {int(p.name[:2]) for p in COURSE.glob("*.md")}
+written = {int(p.name[:2]) for p in COURSE.glob("*.md") if p.name[:2].isdigit()}
 problems = 0
 
 for f in sorted(COURSE.glob("*.md")):
-    own = int(f.name[:2])
     text = f.read_text(encoding="utf-8")
     rows = []
     for m in re.finditer(r"глав[а-яё]*\s+(\d+)", text, re.I):

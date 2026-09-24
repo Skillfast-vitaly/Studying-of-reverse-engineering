@@ -72,12 +72,18 @@ for f in md_files:
 # 6. упражнения глав покрыты ответами
 answers = (ROOT / "ANSWERS.md").read_text(encoding="utf-8") if (ROOT / "ANSWERS.md").exists() else ""
 for f in sorted(COURSE.glob("*.md")):
-    num = f.name[:2].lstrip("0") or "0"
-    if num == "0":
+    if not f.read_text(encoding="utf-8").count("## Упражнения"):
         continue
-    if "## Упражнения" in f.read_text(encoding="utf-8"):
-        if not re.search(rf"^## Глава {num}\.", answers, re.M):
-            add("ОТВЕТЫ", f.name, f"нет раздела «Глава {num }» в ANSWERS.md")
+    m = re.match(r"p(\d+)-", f.name)          # приложения: p1-….md → «Приложение П1»
+    if m:
+        head = f"Приложение П{m.group(1)}"
+    else:
+        num = f.name[:2].lstrip("0") or "0"
+        if num == "0":
+            continue
+        head = f"Глава {num}"
+    if not re.search(rf"^## {head}\.", answers, re.M):
+        add("ОТВЕТЫ", f.name, f"нет раздела «{head}» в ANSWERS.md")
 
 if problems:
     print(f"Найдено проблем: {len(problems)}\n")
