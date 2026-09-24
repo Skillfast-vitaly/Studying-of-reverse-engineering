@@ -279,7 +279,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–16 и 26–28.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–17 и 26–28.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -427,6 +427,13 @@
 
   /* ───────── главы 0–15: общий помощник ───────── */
 
+  function fill4(arr, gen){
+    /* добрать варианты до четырёх: gen(s) даёт новое число на каждом шаге s,
+       поэтому цикл всегда кончается */
+    for(var s = 1; arr.length < 4 && s < 1000; s++){ var v = gen(s); if(arr.indexOf(v) < 0) arr.push(v); }
+    return arr;
+  }
+
   function qa(list, prompt, kind){
     /* list: [вопрос, [варианты…], индекс правильного, разбор] — варианты перемешиваются */
     var it = pick(list), order = shuffle(it[1].map(function(_,i){ return i; }));
@@ -500,7 +507,7 @@
       var right = base + idx*t[1];
       var cand = [right, base+idx, base+idx*t[1]+t[1], base+(idx-1)*t[1]];
       cand = cand.filter(function(v,i){ return cand.indexOf(v)===i; });
-      while(cand.length<4){ var x = right + 16*cand.length; if(cand.indexOf(x)<0) cand.push(x); }
+      fill4(cand, function(s){ return right + 16*s; });
       var opts = shuffle(cand);
       return { prompt:"Массив "+t[0]+" a[] начинается по адресу 0x"+hex(base)+". Где лежит элемент?", kind:"code",
         value:"a["+idx+"]",
@@ -694,13 +701,13 @@
       var s = pick([SECS16[1],SECS16[2],SECS16[2]]), d = ri(0, Math.min(s[3],0x200)-1), off = s[1]+d, rva = s[2]+d;
       if(Math.random() < 0.5){
         var c = shuffle([rva, off, s[2]+d+0x100, rva-s[1]+0x600].filter(function(v,i,a){ return a.indexOf(v)===i; }));
-        while(c.length<4){ var x = rva+0x10*c.length; if(c.indexOf(x)<0) c.push(x); }
+        c = shuffle(fill4(c, function(s){ return rva + 0x10*s; }));
         return { prompt:"Смещение в файле 0x"+hex(off)+". Какой это RVA?", kind:"code", value:"0x"+hex(off)+" → RVA ?",
           options:c.map(function(v){ return "<code>0x"+hex(v)+"</code>"; }), answer:c.indexOf(rva),
           why:"Секция "+s[0]+": смещение "+hex(s[1])+"–… Внутри секции: 0x"+hex(off)+" − 0x"+hex(s[1])+" = 0x"+hex(d)+". RVA = 0x"+hex(s[2])+" + 0x"+hex(d)+" = <code>0x"+hex(rva)+"</code> (главы 8 и 16)."+secTable16() };
       }
       var c2 = shuffle([off, rva, off+0x1000, s[1]+d+0x200].filter(function(v,i,a){ return a.indexOf(v)===i; }));
-      while(c2.length<4){ var y = off+0x10*c2.length; if(c2.indexOf(y)<0) c2.push(y); }
+      c2 = shuffle(fill4(c2, function(s){ return off + 0x10*s; }));
       return { prompt:"Ghidra показывает адрес 0x"+hex(0x140000000+rva)+". По какому смещению искать эти байты в HxD?", kind:"code", value:"0x"+hex(0x140000000+rva)+" → файл ?",
         options:c2.map(function(v){ return "<code>0x"+hex(v)+"</code>"; }), answer:c2.indexOf(off),
         why:"RVA = 0x"+hex(rva)+" — секция "+s[0]+". Внутри секции: 0x"+hex(rva)+" − 0x"+hex(s[2])+" = 0x"+hex(d)+". В файле: 0x"+hex(s[1])+" + 0x"+hex(d)+" = <code>0x"+hex(off)+"</code>."+secTable16() };
@@ -743,6 +750,53 @@
         options:opts.map(function(o){ return "<code>"+o.replace(/</g,"&lt;")+"</code>"; }), answer:opts.indexOf(w),
         why:"Число хранится little-endian: младший байт первым. Разворачиваем <code>"+num.match(/../g).join(" ")+"</code> → <code>"+bytes.map(function(c){ return hex(c,2); }).join(" ")+"</code> → ASCII <code>"+w+"</code>. Ловушка — прочитать задом наперёд: <code>"+rev+"</code> (главы 3 и 16)." };
     } };
+
+  /* ── гл. 17: разбор задачи 2, XOR ── */
+
+  function bin8s(n){ var s=(n&255).toString(2); while(s.length<8) s="0"+s; return s.slice(0,4)+" "+s.slice(4); }
+  function ch17(c){ return (c>=0x20 && c<0x7f) ? " ('"+String.fromCharCode(c).replace(/</g,"&lt;")+"')" : ""; }
+
+  MODES.xorb = { label:"XOR байтов",
+    make:function(){
+      var a = pick([ri(0x20,0x7e), ri(0,255)]), k = pick([0x5A,0x20,0xFF,0x0F,ri(1,255)]), r = a ^ k;
+      var cand = [r, a+k & 255, a & k, a | k].filter(function(v,i,arr){ return arr.indexOf(v)===i; });
+      fill4(cand, function(s){ return (r + 17*s) & 255; });
+      var opts = shuffle(cand);
+      var extra = k===0x20 ? " XOR с 0x20 меняет регистр латинской буквы." : k===0xFF ? " XOR с 0xFF переворачивает все биты — то же, что not." : "";
+      return { prompt:"Посчитай XOR", kind:"code", value:"0x"+hex(a,2)+" XOR 0x"+hex(k,2),
+        options:opts.map(function(v){ return "<code>0x"+hex(v,2)+"</code>"+ch17(v); }), answer:opts.indexOf(r),
+        why:"По битам: <code>"+bin8s(a)+"</code> XOR <code>"+bin8s(k)+"</code> = <code>"+bin8s(r)+"</code> = 0x"+hex(r,2)+ch17(r)+". Где в ключе 1 — бит переворачивается (глава 17)."+extra };
+    } };
+
+  MODES.xorkey = { label:"Ключ по букве",
+    make:function(){
+      var word = pick(["http","C:\\W","MZ","xor_","pass","flag"]), k = ri(1,255);
+      var p0 = word.charCodeAt(0), c0 = p0 ^ k, p1 = word.charCodeAt(1), c1 = p1 ^ k;
+      if(Math.random() < 0.5){
+        var cand = shuffle([k, c0, p0, (k+1)&255].filter(function(v,i,a){ return a.indexOf(v)===i; }));
+        cand = shuffle(fill4(cand, function(s){ return (k + 37*s) & 255; }));
+        return { prompt:"Первый байт шифра 0x"+hex(c0,2)+". Строка точно начинается с '"+word[0]+"'. Какой ключ?", kind:"code",
+          value:"'"+word[0]+"' = 0x"+hex(p0,2)+", шифр 0x"+hex(c0,2),
+          options:cand.map(function(v){ return "<code>0x"+hex(v,2)+"</code>"; }), answer:cand.indexOf(k),
+          why:"текст XOR шифр = ключ: <code>0x"+hex(p0,2)+" XOR 0x"+hex(c0,2)+" = 0x"+hex(k,2)+"</code>. Атака по известному тексту (раздел 17.7)." };
+      }
+      var cand2 = shuffle([p1, c1, p1^0x20, (p1+1)&255].filter(function(v,i,a){ return a.indexOf(v)===i; }));
+      cand2 = shuffle(fill4(cand2, function(s){ return (p1 + 11*s) & 255; }));
+      return { prompt:"Ключ 0x"+hex(k,2)+". Второй байт шифра 0x"+hex(c1,2)+". Какая вторая буква?", kind:"code",
+        value:"0x"+hex(c1,2)+" XOR 0x"+hex(k,2)+" = ?",
+        options:cand2.map(function(v){ return "<code>0x"+hex(v,2)+"</code>"+ch17(v); }), answer:cand2.indexOf(p1),
+        why:"<code>0x"+hex(c1,2)+" XOR 0x"+hex(k,2)+" = 0x"+hex(p1,2)+"</code>"+ch17(p1)+". Для XOR расшифровка — та же операция, что шифрование." };
+    } };
+
+  var LOOPQ = [
+    ["movzx edx, byte ptr [r8+rax]\nxor   edx, 0x5a\nmov   byte ptr [rcx+rax], dl\nadd   rax, 1\ncmp   rax, 0x11\njne   …", ["расшифровка 17 байтов XOR-ом с ключом 0x5A","сравнение двух строк","подсчёт длины строки","копирование без изменений"], 0, "Рисунок цикла расшифровки: байт из таблицы → xor с константой → в буфер → счётчик до 0x11 = 17 (раздел 17.6)."],
+    ["movzx edx, byte ptr [r8+rax]\nxor   edx, eax\nmov   byte ptr [rcx+rax], dl\nadd   rax, 1\ncmp   rax, 0x20\njne   …", ["XOR с номером байта: ключ меняется, 32 байта","XOR с ключом 0x20","обнуление буфера","сравнение строк"], 0, "Ключ — eax, то есть счётчик i: у каждого байта свой. Длина — 0x20 = 32 (упражнение 17.6)."],
+    ["movzx edx, byte ptr [r8+rax]\nsub   edx, 3\nmov   byte ptr [rcx+rax], dl\nadd   rax, 1\ncmp   rax, 8\njne   …", ["расшифровка вычитанием 3 из каждого из 8 байтов","XOR с ключом 3","сдвиг на 3 бита","поиск символа 3"], 0, "Тот же рисунок, но вместо xor — sub. Чтобы зашифровать обратно, прибавляют 3. Бывает xor, add, sub, rol (раздел 17.6)."],
+    ["xor eax, eax", ["обнуление регистра, не шифрование","шифрование eax ключом eax","проверка на ноль","ошибка компилятора"], 0, "xor регистра с самим собой — идиома обнуления (глава 10). Шифрование — это xor с другим значением в цикле."],
+    ["xor al, 0x20  (рядом с проверкой букв)", ["смена регистра буквы","шифрование пароля","обнуление","сравнение с пробелом"], 0, "Коды больших и маленьких латинских букв отличаются на 0x20. XOR с 0x20 переворачивает этот бит (упражнение 17.1)."],
+    ["lea r8, [rip+0x14ab]   ; перед циклом с xor", ["адрес таблицы зашифрованных байтов","ключ шифра","длина данных","адрес функции strcmp"], 0, "lea перед циклом кладёт в регистр адрес данных, по которым цикл идёт: movzx edx, byte ptr [r8+rax] (раздел 17.6)."]
+  ];
+  MODES.loop17 = { label:"Цикл расшифровки", make:function(){ return qa(LOOPQ, "Что делает этот код?", "asm"); } };
 
   /* ───────── глава 27: кольца и ядро ───────── */
 
@@ -1184,6 +1238,7 @@
     { id:"g912", ch:"9–12",  title:"язык машины: регистры, инструкции, стек, вызовы", modes:["regs","jumps","ins","frame","cc","api"], mix:"mix912" },
     { id:"g1315",ch:"13–15", title:"x64dbg, Ghidra, наблюдение за поведением", modes:["keys","dbg","behave"], mix:"mix1315" },
     { id:"g16",  ch:"16",    title:"разбор задачи 1: пароль открытым текстом", modes:["off2rva","ptrle","chk16","num2txt"], mix:"mix16" },
+    { id:"g17",  ch:"17",    title:"разбор задачи 2: пароль под XOR", modes:["xorb","xorkey","loop17"], mix:"mix17" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
