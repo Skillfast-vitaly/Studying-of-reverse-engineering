@@ -1,0 +1,882 @@
+<title>Тренажёр реверсера</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --ground:#f4f6f9; --surface:#ffffff; --surface-2:#eef1f6;
+    --ink:#161b24; --muted:#5c6679; --line:#d7dce5;
+    --accent:#a86a12; --accent-soft:#f5e7cf;
+    --ok:#1f7a53; --ok-soft:#dbf0e6;
+    --bad:#a83232; --bad-soft:#f7dede;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --ground:#0e121a; --surface:#161c27; --surface-2:#1d2431;
+      --ink:#e7eaf1; --muted:#8a94a8; --line:#2a3343;
+      --accent:#e8a33d; --accent-soft:#3a2d17;
+      --ok:#5fc08f; --ok-soft:#14301f;
+      --bad:#e07474; --bad-soft:#331818;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --ground:#0e121a; --surface:#161c27; --surface-2:#1d2431;
+    --ink:#e7eaf1; --muted:#8a94a8; --line:#2a3343;
+    --accent:#e8a33d; --accent-soft:#3a2d17;
+    --ok:#5fc08f; --ok-soft:#14301f;
+    --bad:#e07474; --bad-soft:#331818;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.55;
+    padding-inline:16px; padding-block:24px 40px;
+  }
+  .wrap{max-width:640px; margin:0 auto}
+
+  header{margin-bottom:20px}
+  h1{
+    font-size:clamp(22px,5vw,30px); font-weight:700; margin:0 0 6px;
+    letter-spacing:-.01em; text-wrap:balance;
+  }
+  .sub{color:var(--muted); font-size:14px; margin:0}
+
+  /* группы режимов по главам */
+  .groups{display:flex; flex-direction:column; gap:14px; margin:20px 0}
+  .group-label{
+    display:block; color:var(--muted); font-size:12px; font-weight:600;
+    letter-spacing:.06em; text-transform:uppercase; margin:0 0 7px;
+  }
+  .group-label .ch{font-family:var(--mono); color:var(--accent); letter-spacing:.02em}
+  .modes{display:flex; flex-wrap:wrap; gap:8px}
+  .mode{
+    font:500 13px/1 var(--sans); color:var(--muted);
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; padding:9px 14px; cursor:pointer;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .mode:hover{color:var(--ink)}
+  .mode[aria-pressed="true"]{
+    background:var(--accent); border-color:var(--accent);
+    color:var(--ground); font-weight:600;
+  }
+  .mode.mix{border-style:dashed}
+  .mode:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  /* карточка задачи */
+  .card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:14px; padding:24px 20px; margin-bottom:16px;
+  }
+  .prompt{color:var(--muted); font-size:13px; margin:0 0 14px; letter-spacing:.03em; text-transform:uppercase}
+  .value{
+    font-family:var(--mono); font-size:clamp(28px,8vw,42px); font-weight:600;
+    letter-spacing:.02em; word-break:break-all; margin:0 0 20px;
+    font-variant-numeric:tabular-nums;
+  }
+  .value.asm{font-size:clamp(19px,5vw,26px); word-break:break-word; letter-spacing:0}
+  .value.text{
+    font-family:var(--sans); font-size:clamp(18px,4.6vw,22px); font-weight:600;
+    word-break:normal; letter-spacing:0; line-height:1.4; text-wrap:balance;
+  }
+
+  .answer{display:flex; gap:8px; flex-wrap:wrap}
+  input[type=text]{
+    flex:1 1 180px; min-width:0;
+    font-family:var(--mono); font-size:18px; color:var(--ink);
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:12px 14px;
+  }
+  input[type=text]:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+  button.go{
+    font:600 15px/1 var(--sans); color:var(--ground); background:var(--accent);
+    border:0; border-radius:9px; padding:12px 20px; cursor:pointer;
+  }
+  button.go:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+
+  /* варианты ответа */
+  .choices{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px}
+  .choice{
+    display:flex; align-items:baseline; gap:10px; text-align:left;
+    font:500 15px/1.35 var(--sans); color:var(--ink);
+    background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:12px 14px; cursor:pointer;
+    transition:border-color .15s,background .15s;
+  }
+  .choice:hover:not(:disabled){border-color:var(--accent)}
+  .choice:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+  .choice .k{
+    font:600 12px/1 var(--mono); color:var(--muted);
+    border:1px solid var(--line); border-radius:5px; padding:3px 6px; flex:none;
+  }
+  .choice code{font-family:var(--mono); font-size:14px}
+  .choice:disabled{cursor:default}
+  .choice.right{background:var(--ok-soft); border-color:var(--ok)}
+  .choice.wrong{background:var(--bad-soft); border-color:var(--bad)}
+  .choice.right .k{color:var(--ok); border-color:var(--ok)}
+  .choice.wrong .k{color:var(--bad); border-color:var(--bad)}
+
+  /* обратная связь */
+  .feedback{border-radius:11px; padding:14px 16px; margin-bottom:16px; font-size:15px}
+  .feedback.ok{background:var(--ok-soft); border:1px solid var(--ok); color:var(--ink)}
+  .feedback.bad{background:var(--bad-soft); border:1px solid var(--bad); color:var(--ink)}
+  .feedback b{font-family:var(--mono)}
+  .feedback .head{font-weight:600; margin-bottom:6px; display:block}
+  .feedback .why{color:var(--muted); font-size:14px; line-height:1.55; display:block}
+  .feedback .why code{font-family:var(--mono); color:var(--ink)}
+  .feedback .why strong{color:var(--ink)}
+  .feedback .next{
+    margin-top:12px; font:600 14px/1 var(--sans); color:var(--ink);
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:8px; padding:10px 16px; cursor:pointer;
+  }
+  .feedback .next:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  /* статистика */
+  .stats{display:flex; gap:10px; flex-wrap:wrap}
+  .stat{
+    flex:1 1 110px; background:var(--surface); border:1px solid var(--line);
+    border-radius:11px; padding:12px 14px;
+  }
+  .stat .n{font-family:var(--mono); font-size:22px; font-weight:600; font-variant-numeric:tabular-nums}
+  .stat .l{color:var(--muted); font-size:12px; letter-spacing:.02em}
+  .stat.streak .n{color:var(--accent)}
+
+  details.cheat{margin-top:22px; border-top:1px solid var(--line); padding-top:16px}
+  details.cheat + details.cheat{margin-top:12px; padding-top:12px}
+  details.cheat summary{cursor:pointer; color:var(--muted); font-size:14px; font-weight:500}
+  details.cheat summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .cheat-body{overflow-x:auto; margin-top:12px}
+  table{border-collapse:collapse; font-family:var(--mono); font-size:13px; width:100%}
+  th,td{border:1px solid var(--line); padding:5px 9px; text-align:left; vertical-align:top}
+  th{color:var(--muted); font-weight:500}
+  td.t{font-family:var(--sans)}
+
+  footer{margin-top:26px; color:var(--muted); font-size:13px; line-height:1.6}
+  footer a{color:var(--accent)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Тренажёр реверсера</h1>
+    <p class="sub">Навыки, которые в реверсе нужны каждую секунду, и проверка понимания по главам. Тренируй до автоматизма — как таблицу умножения.</p>
+  </header>
+
+  <nav class="groups" id="groups" aria-label="Режимы тренировки по главам"></nav>
+
+  <div class="card">
+    <p class="prompt" id="prompt">Переведи в десятичную</p>
+    <p class="value" id="value">0x2A</p>
+    <form class="answer" id="form">
+      <input type="text" id="answer" autocomplete="off" autocapitalize="off"
+             spellcheck="false" aria-label="Твой ответ" placeholder="ответ">
+      <button class="go" type="submit" id="submit">Проверить</button>
+    </form>
+    <div class="choices" id="choices" role="group" aria-label="Варианты ответа" hidden></div>
+  </div>
+
+  <div id="feedback" aria-live="polite"></div>
+
+  <div class="stats">
+    <div class="stat streak">
+      <div class="n" id="s-streak">0</div>
+      <div class="l">серия подряд</div>
+    </div>
+    <div class="stat">
+      <div class="n" id="s-total">0</div>
+      <div class="l">всего решено</div>
+    </div>
+    <div class="stat">
+      <div class="n" id="s-acc">—</div>
+      <div class="l">точность</div>
+    </div>
+    <div class="stat">
+      <div class="n" id="s-mode">—</div>
+      <div class="l" id="s-mode-l">в этом режиме</div>
+    </div>
+  </div>
+
+  <details class="cheat">
+    <summary>Шпаргалка к главам 1–7 — открывай, только если совсем застрял</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>hex</th><th>dec</th><th>bin</th><th>hex</th><th>dec</th><th>bin</th></tr>
+        <tr><td>0</td><td>0</td><td>0000</td><td>8</td><td>8</td><td>1000</td></tr>
+        <tr><td>1</td><td>1</td><td>0001</td><td>9</td><td>9</td><td>1001</td></tr>
+        <tr><td>2</td><td>2</td><td>0010</td><td>A</td><td>10</td><td>1010</td></tr>
+        <tr><td>3</td><td>3</td><td>0011</td><td>B</td><td>11</td><td>1011</td></tr>
+        <tr><td>4</td><td>4</td><td>0100</td><td>C</td><td>12</td><td>1100</td></tr>
+        <tr><td>5</td><td>5</td><td>0101</td><td>D</td><td>13</td><td>1101</td></tr>
+        <tr><td>6</td><td>6</td><td>0110</td><td>E</td><td>14</td><td>1110</td></tr>
+        <tr><td>7</td><td>7</td><td>0111</td><td>F</td><td>15</td><td>1111</td></tr>
+      </table>
+      <p class="sub" style="margin-top:10px">
+        Вес позиций в hex: 1, 16, 256, 4096. ASCII: <code>A</code>=65, <code>a</code>=97, <code>0</code>=48.
+      </p>
+    </div>
+  </details>
+
+  <details class="cheat">
+    <summary>Шпаргалка к главе 27 — кольца, двери, коды</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>CS</th><th>bin</th><th>кольцо</th><th>чей</th></tr>
+        <tr><td>0x33</td><td>0011 00<b>11</b></td><td>3</td><td class="t">64-битная программа</td></tr>
+        <tr><td>0x23</td><td>0010 00<b>11</b></td><td>3</td><td class="t">32-битная программа</td></tr>
+        <tr><td>0x10</td><td>0001 00<b>00</b></td><td>0</td><td class="t">ядро Windows</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Кольцо — два младших бита <code>CS</code>. Двери в ядро: системный вызов (программа просит сама), исключение (из-за инструкции программы), аппаратное прерывание (устройство, в любой момент).</p>
+      <table>
+        <tr><th>код</th><th>что случилось</th></tr>
+        <tr><td>C0000005</td><td class="t">нарушение доступа: плохой адрес, страница ядра</td></tr>
+        <tr><td>C0000096</td><td class="t">привилегированная инструкция: <code>hlt</code>, <code>cli</code>, <code>wrmsr</code>…</td></tr>
+        <tr><td>80000003</td><td class="t">точка останова, <code>int3</code> (байт <code>CC</code>)</td></tr>
+        <tr><td>80000004</td><td class="t">одиночный шаг, флаг <code>TF</code></td></tr>
+        <tr><td>80000001</td><td class="t">сторожевая страница</td></tr>
+        <tr><td>C0000094</td><td class="t">целочисленное деление на ноль</td></tr>
+        <tr><td>C00000FD</td><td class="t">переполнение стека</td></tr>
+      </table>
+      <p class="sub" style="margin-top:10px">Первая цифра <code>8</code> — предупреждение, <code>C</code> — ошибка.</p>
+    </div>
+  </details>
+
+  <details class="cheat">
+    <summary>Шпаргалка к главе 28 — заглушка и коды</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>смещ.</th><th>байты</th><th>инструкция</th></tr>
+        <tr><td>+00</td><td>4C 8B D1</td><td>mov r10, rcx</td></tr>
+        <tr><td>+03</td><td>B8 xx xx 00 00</td><td>mov eax, номер</td></tr>
+        <tr><td>+08</td><td>F6 04 25 08 03 FE 7F 01</td><td>test byte ptr [7FFE0308], 1</td></tr>
+        <tr><td>+10</td><td>75 03</td><td>jne +15</td></tr>
+        <tr><td>+12</td><td>0F 05</td><td>syscall</td></tr>
+        <tr><td>+14</td><td>C3</td><td>ret</td></tr>
+        <tr><td>+15</td><td>CD 2E</td><td>int 0x2E</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0"><code>syscall</code>: <code>RCX</code> ← адрес возврата, <code>R11</code> ← <code>RFLAGS</code>, <code>RIP</code> ← <code>LSTAR</code>, кольцо 0, <code>IF</code> и <code>TF</code> сброшены, <code>RSP</code> не меняется. Номера от <code>0x1000</code> — графика, <code>win32k</code>.</p>
+      <table>
+        <tr><th>NTSTATUS</th><th>Win32</th><th>смысл</th></tr>
+        <tr><td>C0000034</td><td>2</td><td class="t">имя не найдено</td></tr>
+        <tr><td>C000003A</td><td>3</td><td class="t">путь не найден</td></tr>
+        <tr><td>C0000022</td><td>5</td><td class="t">доступ запрещён</td></tr>
+        <tr><td>C0000008</td><td>6</td><td class="t">неверный дескриптор</td></tr>
+      </table>
+    </div>
+  </details>
+
+  <footer>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 1–7, 27 и 28.<br>
+    Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
+    Клавиши: <b>1–6</b> — выбрать вариант, <b>Enter</b> — дальше.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var H = "0123456789ABCDEF";
+  function ri(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+  function hex(n,w){ var s = n.toString(16).toUpperCase(); while(w && s.length<w) s = "0"+s; return s; }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+  function shuffle(a){ a = a.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+  function bin8(n){ var s = (n & 0xFF).toString(2); while(s.length<8) s="0"+s; return s; }
+  function norm(s){ return s.trim().toLowerCase().replace(/ё/g,"е"); }
+
+  /* ───────── главы 1–7: как было ───────── */
+
+  var TERMS = [
+    ["byte","байт"], ["pointer","указатель"], ["stack","стек"], ["heap","куча"],
+    ["register","регистр"], ["breakpoint","точка останова"], ["entry point","точка входа"],
+    ["import","импорт"], ["section","секция"], ["packer","упаковщик"],
+    ["obfuscation","обфускация"], ["disassembler","дизассемблер"],
+    ["decompiler","декомпилятор"], ["debugger","отладчик"], ["patch","патч"],
+    ["endianness","порядок байтов"], ["executable","исполняемый файл"],
+    ["header","заголовок"], ["symbol","символ"], ["dump","дамп"]
+  ];
+
+  var MODES = {
+    hex2dec: {
+      label:"HEX → DEC", drill:true,
+      make:function(){
+        var n = pick([ri(10,255), ri(256,65535), pick([0xFF,0x100,0x1000,0x7F,0x80,0x400])]);
+        return {
+          prompt:"Переведи в десятичную",
+          value:"0x"+hex(n),
+          check:function(s){ return parseInt(s.trim(),10) === n; },
+          right:String(n),
+          why:function(){
+            var h = hex(n), parts=[], w=1, out=[];
+            for(var i=h.length-1;i>=0;i--){ parts.unshift(H.indexOf(h[i])+"×"+w); w*=16; }
+            for(var j=0;j<h.length;j++){ out.push(H.indexOf(h[j])*Math.pow(16,h.length-1-j)); }
+            return "Вес позиций справа налево: 1, 16, 256, 4096… Считаем: "+
+                   parts.join(" + ")+" = "+out.join(" + ")+" = <code>"+n+"</code>.";
+          }
+        };
+      }
+    },
+    dec2hex: {
+      label:"DEC → HEX", drill:true,
+      make:function(){
+        var n = pick([ri(16,255), ri(256,4095), pick([255,256,1024,4096,127,128])]);
+        var h = hex(n);
+        return {
+          prompt:"Переведи в шестнадцатеричную",
+          value:String(n),
+          check:function(s){
+            var t = s.trim().toUpperCase().replace(/^0X/,"").replace(/H$/,"");
+            return t.replace(/^0+/,"") === h.replace(/^0+/,"") && t.length>0;
+          },
+          right:"0x"+h,
+          why:function(){
+            var steps=[], x=n;
+            while(x>0){ steps.push(x+" ÷ 16 = "+Math.floor(x/16)+", остаток "+H[x%16]); x=Math.floor(x/16); }
+            return "Делим на 16 и читаем остатки снизу вверх:<br>"+steps.join("<br>")+
+                   "<br>Получается <code>0x"+h+"</code>.";
+          }
+        };
+      }
+    },
+    endian: {
+      label:"Порядок байтов", drill:true,
+      make:function(){
+        var n = pick([ri(1,4095), ri(1,65535), pick([1000,4096,256,1,4200992])]);
+        var b=[], x=n;
+        for(var i=0;i<4;i++){ b.push(hex(x & 0xFF,2)); x = Math.floor(x/256); }
+        return {
+          prompt:"Байты в памяти (little-endian). Какое это число?",
+          value:b.join(" "),
+          check:function(s){ return parseInt(s.trim(),10) === n; },
+          right:String(n),
+          why:function(){
+            var rev = b.slice().reverse();
+            return "x86 хранит число задом наперёд. Переворачиваем: <code>"+b.join(" ")+
+                   "</code> → <code>"+rev.join(" ")+"</code> → <code>0x"+rev.join("")+
+                   "</code> = <code>"+n+"</code>.<br>Подсказка: нули справа в памяти почти всегда значат маленькое число.";
+          }
+        };
+      }
+    },
+    ascii: {
+      label:"ASCII", drill:true,
+      make:function(){
+        var w = pick(["Rev","Hello","byte","PE","Code","exe","hack","Flag","main","push"]);
+        var b = [];
+        for(var i=0;i<w.length;i++) b.push(hex(w.charCodeAt(i),2));
+        return {
+          prompt:"Расшифруй байты как текст",
+          value:b.join(" "),
+          check:function(s){ return s.trim() === w; },
+          right:w,
+          why:function(){
+            var rows=[];
+            for(var i=0;i<w.length;i++) rows.push("<code>0x"+b[i]+"</code> = "+w.charCodeAt(i)+" = <code>"+w[i]+"</code>");
+            return rows.join("<br>")+"<br>Опоры: <code>A</code>=65 (0x41), <code>a</code>=97 (0x61), <code>0</code>=48 (0x30).";
+          }
+        };
+      }
+    },
+    signed: {
+      label:"Знаковые", drill:true,
+      make:function(){
+        var raw = pick([0xFF,0xFE,0xFB,0x80,0x7F,0x01,0xF0,0x9C,0xC0]);
+        var val = raw > 127 ? raw - 256 : raw;
+        return {
+          prompt:"Байт как ЗНАКОВОЕ число (дополнительный код)",
+          value:"0x"+hex(raw,2),
+          check:function(s){ return parseInt(s.trim().replace(/\s/g,""),10) === val; },
+          right:String(val),
+          why:function(){
+            if(raw<=127) return "Старший бит равен 0 — число положительное, значит знаковое и беззнаковое совпадают: <code>"+val+"</code>.";
+            return "Старший бит равен 1 — число отрицательное. Вычитаем 256: "+raw+" − 256 = <code>"+val+
+                   "</code>.<br>Как беззнаковое тот же байт читался бы как "+raw+". В самом байте не записано, какой он — это решают инструкции.";
+          }
+        };
+      }
+    },
+    terms: {
+      label:"Термины", drill:true,
+      make:function(){
+        var t = pick(TERMS);
+        return {
+          prompt:"Переведи термин на русский",
+          value:t[0],
+          check:function(s){
+            var a = norm(s), b = norm(t[1]);
+            return a === b || (b.indexOf(a)===0 && a.length >= Math.max(4, b.length-3));
+          },
+          right:t[1],
+          why:function(){ return "Английский термин <code>"+t[0]+"</code> — это «"+t[1]+"». Полный словарь с произношением лежит в GLOSSARY.md."; }
+        };
+      }
+    }
+  };
+
+  /* ───────── глава 27: кольца и ядро ───────── */
+
+  var CS_REAL = [
+    { v:0x33, who:"так выглядит CS у любой 64-битной программы в Windows" },
+    { v:0x10, who:"так выглядит CS у ядра 64-битной Windows — увидишь в WinDbg в главе 30" },
+    { v:0x23, who:"так выглядит CS у 32-битной программы. Число другое, а кольцо то же, 3" }
+  ];
+
+  var PRIV_OPTS = ["Выполнится", "<code>C0000096</code> — привилегированная",
+                   "<code>C0000005</code> — нарушение доступа", "<code>80000003</code> — точка останова"];
+  var PRIV = [
+    ["add rax, rbx", 0, "Обычная арифметика. Разрешена в любом кольце."],
+    ["mov rax, qword ptr [rsp+8]", 0, "Чтение своего стека — повседневная работа программы, страница пользовательская."],
+    ["cpuid", 0, "Узнать модель процессора может любая программа. Под гипервизором на Intel она всегда вызывает VM exit, но программа этого не заметит (глава 27, раздел 27.4)."],
+    ["rdtsc", 0, "Счётчик тактов программам разрешён: процессор умеет его запретить, но Windows этого не делает."],
+    ["syscall", 0, "Это законная дверь в ядро. Процессор перейдёт в кольцо 0 — туда, куда заранее указало ядро, а не туда, куда хочет программа."],
+    ["hlt", 1, "Остановить процессор может только кольцо 0. Это опыт 1 из раздела 27.5."],
+    ["cli", 1, "Запрет прерываний. Если бы программе это разрешили, таймер перестал бы стучать в ядро и планировщик не смог бы отнять у неё процессор."],
+    ["sti", 1, "Разрешить прерывания — пара к <code>cli</code>, тоже только для кольца 0."],
+    ["wrmsr", 1, "Запись в особые регистры настроек процессора (MSR) — это переделка самого процессора. Только кольцо 0."],
+    ["rdmsr", 1, "Даже <strong>прочитать</strong> регистры MSR можно только в кольце 0."],
+    ["mov cr3, rax", 1, "<code>CR3</code> указывает на таблицы перевода адресов. Подменив их, программа увидела бы чужую память."],
+    ["mov rax, cr0", 1, "Даже чтение управляющих регистров <code>CR0</code>–<code>CR4</code> в кольце 3 запрещено."],
+    ["lidt [rax]", 1, "Загрузка таблицы прерываний IDT — туда ядро записывает адреса своих «окошек». Только кольцо 0 (глава 34)."],
+    ["lgdt [rax]", 1, "Загрузка таблицы GDT, где описаны сегменты и кольца. Только кольцо 0 (глава 33)."],
+    ["invlpg [rax]", 1, "Сброс запомненного перевода адреса одной страницы — работа менеджера памяти ядра (глава 32)."],
+    ["mov al, byte ptr [0xFFFF800000000000]", 2, "Сама инструкция разрешена, запрещён <strong>адрес</strong>: это верхняя половина, страницы ядра. Опыт 2 из раздела 27.5."],
+    ["mov byte ptr [0], 1", 2, "Запись по нулевому указателю: страница по адресу 0 не выделена (главы 4 и 26)."],
+    ["int3", 3, "<code>int3</code> разрешена, но её единственная работа — вызвать исключение «точка останова». Так устроены программные точки останова (глава 13)."]
+  ];
+
+  var DOOR_OPTS = ["Системный вызов", "Исключение", "Аппаратное прерывание"];
+  var DOOR = [
+    ["Программа вызывает CreateFileW", 0, "Открыть файл — работа с диском, её делает ядро. Программа сама и нарочно просит его через <code>syscall</code>."],
+    ["Программа вызывает VirtualAlloc", 0, "Выделять память может только менеджер памяти ядра. Программа просит об этом через <code>syscall</code>."],
+    ["Программа вызывает ResetEvent", 0, "Событие живёт в ядре, опустить его флажок может только ядро. Это эксперимент <code>modetime.c</code>."],
+    ["Программа вызывает Sleep(1000)", 0, "Уснуть — значит попросить планировщик убрать поток из очереди. Поток уходит в ядро через <code>syscall</code> и спит там."],
+    ["Ты нажал клавишу", 2, "Клавиатура — устройство. Она стучит в процессор в любой момент, что бы ни делала программа."],
+    ["Ты сдвинул мышь", 2, "Мышь — устройство, её сигнал приходит как аппаратное прерывание."],
+    ["У потока с бесконечным циклом кончился квант", 2, "Поток ничего не просит у ядра, поэтому вернуть процессор ядру может только прерывание таймера."],
+    ["Сетевая карта приняла пакет", 2, "Сетевая карта — устройство, о новом пакете она сообщает прерыванием."],
+    ["Диск закончил читать данные", 2, "Диск работает сам по себе и сообщает о готовности прерыванием."],
+    ["Программа впервые пишет в страницу, только что выделенную VirtualAlloc", 1, "Страничный сбой: физической памяти под страницей ещё нет. Ядро молча подставит её и повторит инструкцию — программа не заметит."],
+    ["Программа дошла до точки останова отладчика", 1, "Байт <code>CC</code> — инструкция <code>int3</code>, её работа — вызвать исключение (глава 13)."],
+    ["Программа делит число на ноль", 1, "Процессор не может выполнить деление и зовёт ядро исключением."],
+    ["Программа выполнила hlt", 1, "Привилегированная инструкция в кольце 3 — исключение <code>C0000096</code>."],
+    ["Программа читает адрес FFFF800000000000", 1, "Страница ядра — процессор отказывает и зовёт ядро исключением <code>C0000005</code>."],
+    ["Стек дорос до сторожевой страницы", 1, "Касание сторожевой страницы вызывает исключение; ядро выделяет её по-настоящему и ставит новую ниже (глава 26)."],
+    ["Шаг F7 в x64dbg", 1, "Отладчик поднимает флаг <code>TF</code>, и после одной инструкции процессор сам вызывает исключение «одиночный шаг» (глава 13)."]
+  ];
+
+  var CODES = [
+    ["C0000005", "нарушение доступа (access violation)", "Обращение к памяти, к которой нет доступа: нулевой указатель, невыделенная страница, страница ядра, запись в «только чтение»."],
+    ["C0000096", "привилегированная инструкция", "Попытка выполнить в кольце 3 инструкцию кольца 0: <code>hlt</code>, <code>cli</code>, <code>wrmsr</code>, <code>mov cr3, …</code> (глава 27)."],
+    ["80000003", "точка останова (int3)", "Процессор выполнил <code>int3</code>, байт <code>CC</code>. Так работают программные точки останова (глава 13)."],
+    ["80000004", "одиночный шаг (флаг TF)", "Процессор выполнил одну инструкцию с поднятым флагом <code>TF</code>. Так отладчик делает шаг F7 (глава 13)."],
+    ["80000001", "сторожевая страница", "Касание страницы с флагом <code>PAGE_GUARD</code>. Так растёт стек (глава 26)."],
+    ["C0000094", "целочисленное деление на ноль", "Инструкция <code>div</code> или <code>idiv</code> получила ноль в делителе."],
+    ["C00000FD", "переполнение стека", "Поток израсходовал весь зарезервированный под стек объём. Чаще всего — бесконечная рекурсия (глава 26)."]
+  ];
+
+  var WHERE_OPTS = ["Кольцо 3", "Кольцо 0", "Ниже кольца 0 — гипервизор"];
+  var WHERE = [
+    ["kernel32.dll", 0, "Ловушка в названии: «kernel» — но это обычная библиотека кольца 3, загруженная в твой процесс."],
+    ["kernelbase.dll", 0, "Библиотека кольца 3, куда Microsoft перенесла большую часть кода <code>kernel32.dll</code>."],
+    ["ntdll.dll", 0, "Последняя остановка перед ядром, но ещё кольцо 3: именно здесь стоит инструкция <code>syscall</code>."],
+    ["msvcrt.dll", 0, "Библиотека языка C (<code>printf</code>, <code>getchar</code>) — обычный код кольца 3."],
+    ["notepad.exe", 0, "Любая программа работает в кольце 3."],
+    ["x64dbg.exe", 0, "Отладчик — тоже программа кольца 3. Поэтому он не видит, что поток делает в ядре."],
+    ["Программа, запущенная от имени администратора", 0, "Администратор может больше по правилам Windows, но для процессора это тот же код кольца 3, CS = 0x33."],
+    ["ntoskrnl.exe", 1, "Само ядро Windows: планировщик, менеджер памяти, процессы и потоки."],
+    ["Драйвер null.sys", 1, "Драйверы загружаются в ядро и работают в кольце 0 наравне с ним."],
+    ["Драйвер Process Monitor", 1, "Process Monitor ставит свой драйвер, чтобы видеть обращения к файлам всех процессов. Поэтому и просит права администратора."],
+    ["hal.dll", 1, "Слой абстракции оборудования, часть кольца 0. В 64-битной Windows его код встроен в <code>ntoskrnl.exe</code>."],
+    ["Планировщик потоков", 1, "Часть ядра <code>ntoskrnl.exe</code>, которая раздаёт процессор потокам."],
+    ["Hyper-V при включённой VBS", 2, "Гипервизор Microsoft. При включённой VBS вся Windows, включая ядро, работает его гостем."],
+    ["Твой будущий гипервизор", 2, "Цель курса: код, который работает в режиме VMX root, старше кольца 0 гостевой системы."]
+  ];
+
+  var TERMS27 = [
+    ["kernel mode","режим ядра","кёрнел мóуд"], ["user mode","режим пользователя","юзер мóуд"],
+    ["protection rings","кольца защиты","протéкшен рингз"], ["privileged instruction","привилегированная инструкция","прúвилиджд инстрáкшен"],
+    ["system call","системный вызов","сúстем кол"], ["hardware interrupt","аппаратное прерывание","хáрдвэр интерáпт"],
+    ["page fault","страничный сбой","пейдж фолт"], ["driver","драйвер","дрáйвер"],
+    ["hypervisor","гипервизор","хáйпервайзер"], ["guest","гость (ОС под гипервизором)","гест"],
+    ["bug check","аварийная остановка системы","баг чек"], ["nested virtualization","вложенная виртуализация","нéстид вёрчуалайзéйшен"],
+    ["current privilege level","текущий уровень привилегий","кáррент прúвилидж лéвел"], ["access violation","нарушение доступа","áксесс вайолéйшен"],
+    ["context switch","переключение контекста","кóнтекст свич"], ["scheduler","планировщик","шéдьюлер"],
+    ["inline assembly","ассемблерная вставка","инлайн эссéмбли"], ["exception","исключение","иксéпшен"]
+  ];
+
+  function fixedChoice(prompt, kind, list, opts){
+    var it = pick(list);
+    return { prompt:prompt, kind:kind, value:it[0], options:opts, answer:it[1], why:it[2] };
+  }
+
+  MODES.cs = {
+    label:"Кольцо по CS",
+    make:function(){
+      var real = Math.random() < 0.7, v, who;
+      if(real){ var r = pick(CS_REAL); v = r.v; who = r.who; }
+      else { v = ri(0,255); who = "это число выдумано для тренировки — правило работает для любого"; }
+      var ring = v & 3, b = bin8(v);
+      return {
+        prompt:"В каком кольце работает процессор, если CS = …", kind:"code",
+        value:"0x"+hex(v,2),
+        options:["Кольцо 0","Кольцо 1","Кольцо 2","Кольцо 3"], answer:ring,
+        why:"Смотрим два младших бита: <code>0x"+hex(v,2)+"</code> = <code>"+b.slice(0,4)+" "+b.slice(4,6)+
+            "<strong>"+b.slice(6)+"</strong></code> → <code>"+b.slice(6)+"</code> = "+ring+". Значит, кольцо "+ring+"."+
+            " А "+who+"."+(ring===1||ring===2 ? " В Windows кольца 1 и 2 пустуют, настоящий CS таким не бывает." : "")
+      };
+    }
+  };
+  MODES.priv = {
+    label:"Можно в кольце 3?",
+    make:function(){ return fixedChoice("Программа выполняет в кольце 3. Что будет?", "asm", PRIV, PRIV_OPTS); }
+  };
+  MODES.door = {
+    label:"Дверь в ядро",
+    make:function(){ return fixedChoice("Через какую дверь процессор попадёт в кольцо 0?", "text", DOOR, DOOR_OPTS); }
+  };
+  MODES.code = {
+    label:"Код исключения",
+    make:function(){
+      var it = pick(CODES);
+      var others = shuffle(CODES.filter(function(c){ return c !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      var lead = it[0][0] === "8" ? "Первая цифра <code>8</code> — по классификации Windows это «предупреждение» (warning): такие исключения часто служебные, их ждёт отладчик или сама система." :
+                                     "Первая цифра <code>C</code> — по классификации Windows это «ошибка» (error).";
+      return {
+        prompt:"Что означает код исключения?", kind:"code",
+        value:it[0],
+        options:all.map(function(c){ return c[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> — "+it[1]+". "+it[2]+"<br>"+lead
+      };
+    }
+  };
+  MODES.where = {
+    label:"Где работает",
+    make:function(){ return fixedChoice("В каком режиме работает этот код?", "text", WHERE, WHERE_OPTS); }
+  };
+  MODES.terms27 = {
+    label:"Термины ядра",
+    make:function(){
+      var it = pick(TERMS27);
+      var others = shuffle(TERMS27.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return {
+        prompt:"Выбери перевод термина", kind:"text",
+        value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины главы — в GLOSSARY.md, раздел «Режимы процессора и ядро»."
+      };
+    }
+  };
+
+
+
+  /* ───────── глава 28: системные вызовы ───────── */
+
+  function le32(n){ var b=[]; for(var i=0;i<4;i++){ b.push(hex((n>>>(8*i)) & 0xFF,2)); } return b; }
+  function stubBytes(ssn){
+    return ["4C","8B","D1","B8"].concat(le32(ssn)).concat(["F6","04","25","08","03","FE","7F","01","75","03","0F","05","C3","CD","2E","C3"]);
+  }
+
+  MODES.stub = {
+    label:"Заглушка по байтам",
+    make:function(){
+      var ssn = pick([0x0F,0x55,0x34,0x18,0x26,0x3E,0x50,0x1004,0x1016,0x10A2]);
+      var bytes = stubBytes(ssn).join(" ");
+      var q = ri(1,4), lb = le32(ssn);
+      if(q===1){
+        var right = "0x"+hex(ssn,4);
+        var wrong = shuffle(["0x"+lb[0]+lb[1]+"0000", "0x"+hex(0xB8,4), "0x"+hex((ssn*16)&0xFFFF,4), "0x"+hex(ssn+1,4)])
+                    .filter(function(x){ return x!==right; }).slice(0,3);
+        var opts = shuffle(wrong.concat([right]));
+        return { prompt:"Заглушка из ntdll.dll. Какой номер системного вызова?", kind:"asm", value:bytes,
+          options:opts.map(function(o){ return "<code>"+o+"</code>"; }), answer:opts.indexOf(right),
+          why:"После опкода <code>B8</code> (<code>mov eax, …</code>) идут 4 байта числа задом наперёд (little-endian, глава 3): <code>"+lb.join(" ")+"</code> → <code>"+right+"</code>."+(ssn>=0x1000?" Номер от <code>0x1000</code> — это вызов графической части ядра, win32k.":"") };
+      }
+      if(q===2){
+        var o2 = ["<code>0x08</code>","<code>0x10</code>","<code>0x12</code>","<code>0x14</code>"];
+        return { prompt:"На каком смещении от начала функции стоит syscall (0F 05)?", kind:"asm", value:bytes,
+          options:o2, answer:2,
+          why:"Считаем длины: <code>mov r10, rcx</code> — 3 байта, <code>mov eax, …</code> — 5, <code>test …</code> — 8, <code>jne</code> — 2. Итого 3 + 5 + 8 + 2 = 18 = <code>0x12</code>." };
+      }
+      if(q===3){
+        var base = pick([0x7FFA12340000, 0x7FFB9C801230, 0x7FF8AB4C2F40]);
+        var h = function(n){ return hex(n,16); };
+        var cand = [base+0x14, base+0x12, base+0x15, base];
+        var o3 = shuffle(cand);
+        return { prompt:"Заглушка начинается по адресу "+h(base)+". Что будет в RCX сразу после возврата из syscall?", kind:"asm", value:bytes,
+          options:o3.map(function(n){ return "<code>"+h(n)+"</code>"; }), answer:o3.indexOf(base+0x14),
+          why:"<code>syscall</code> кладёт в <code>RCX</code> адрес <strong>следующей</strong> инструкции — <code>ret</code>. <code>syscall</code> стоит на <code>+0x12</code> и занимает 2 байта (<code>0F 05</code>), значит <code>ret</code> — на <code>+0x14</code>: <code>"+h(base+0x14)+"</code>." };
+      }
+      var gui = ssn >= 0x1000;
+      return { prompt:"Куда уйдёт этот системный вызов?", kind:"asm", value:bytes,
+        options:["В ntoskrnl.exe — обычная часть ядра","В win32k…sys — окна и графика"], answer:gui?1:0,
+        why:"Номер — <code>0x"+hex(ssn,4)+"</code>. "+(gui?"Он от <code>0x1000</code> и больше — такие номера ядро отправляет во вторую таблицу, в <code>win32k</code>. Заглушки для них лежат в <code>win32u.dll</code>.":"Он меньше <code>0x1000</code> — это таблица <code>ntoskrnl.exe</code>. Заглушки для неё лежат в <code>ntdll.dll</code>.") };
+    }
+  };
+
+  var REGS = [
+    ["Что лежит в RCX сразу после возврата из syscall?", ["адрес инструкции после syscall","первый аргумент","номер вызова","результат NTSTATUS"], 0,
+     "<code>syscall</code> сам пишет в <code>RCX</code> адрес возврата, а <code>sysret</code> по нему возвращается. Первый аргумент поэтому заранее копируют в <code>R10</code>."],
+    ["Что лежит в R11 сразу после возврата из syscall?", ["копия RFLAGS","адрес возврата","первый аргумент","указатель стека ядра"], 0,
+     "<code>syscall</code> сохраняет в <code>R11</code> регистр флагов, <code>sysret</code> возвращает флаги оттуда."],
+    ["Откуда ядро берёт первый аргумент системного вызова?", ["из R10","из RCX","из RAX","со стека"], 0,
+     "<code>RCX</code> затирает сам <code>syscall</code>, поэтому заглушка начинается с <code>mov r10, rcx</code>."],
+    ["В каком регистре номер системного вызова?", ["EAX","ECX","R10","R11"], 0,
+     "Заглушка кладёт номер инструкцией <code>mov eax, номер</code>. По нему ядро находит функцию в таблице SSDT."],
+    ["Где результат системного вызова после возврата?", ["в RAX — код NTSTATUS","в RCX — код NTSTATUS","в R11 — код Win32","в TEB — код Win32"], 0,
+     "Ядро возвращает <code>NTSTATUS</code> в <code>RAX</code>. Код Win32 для <code>GetLastError</code> потом вычисляет <code>kernelbase.dll</code>."],
+    ["Куда прыгает процессор при syscall?", ["по адресу из регистра LSTAR","по адресу из RCX","по адресу из EAX","в ntdll.dll"], 0,
+     "Адрес обработчика ядро записало в MSR <code>LSTAR</code> при загрузке. Писать MSR можно только из кольца 0 — программа стучит, но не выбирает."],
+    ["Что происходит с RSP при syscall?", ["не меняется — стек пользовательский","процессор ставит стек ядра","обнуляется","копируется в RCX"], 0,
+     "<code>syscall</code> не трогает <code>RSP</code>. Стек ядра загружают первые инструкции обработчика <code>KiSystemCall64</code>."],
+    ["Какой флаг сбрасывается при syscall, чтобы до смены стека не пришло прерывание?", ["IF","ZF","CF","DF"], 0,
+     "<code>IF</code> — разрешение прерываний. Пока ядро на пользовательском стеке, прерывание положило бы данные ядра в память программы."],
+    ["Какой инструкцией ядро возвращается из системного вызова?", ["sysret","ret","iretq","syscall"], 0,
+     "<code>sysret</code>: <code>RIP</code> ← <code>RCX</code>, <code>RFLAGS</code> ← <code>R11</code>, кольцо 3. <code>iretq</code> — возврат после исключений и прерываний."]
+  ];
+  MODES.sysregs = {
+    label:"syscall и регистры",
+    make:function(){
+      var it = pick(REGS), order = shuffle([0,1,2,3]);
+      return { prompt:"Что делает syscall", kind:"text", value:it[0],
+        options:order.map(function(i){ return it[1][i].replace(/\b(R[A-Z0-9]+|E[A-Z]X|LSTAR|IF|ZF|CF|DF|TEB|sysret|ret|iretq|syscall|ntdll\.dll)\b/g,"<code>$1</code>"); }),
+        answer:order.indexOf(it[2]), why:it[3] };
+    }
+  };
+
+  var NTS = [
+    ["C0000034","STATUS_OBJECT_NAME_NOT_FOUND","имя не найдено: папка есть, файла нет",2],
+    ["C000003A","STATUS_OBJECT_PATH_NOT_FOUND","путь не найден: нет папки по дороге",3],
+    ["C0000022","STATUS_ACCESS_DENIED","доступ запрещён",5],
+    ["C0000008","STATUS_INVALID_HANDLE","неверный дескриптор",6]
+  ];
+  var W32 = {2:"ERROR_FILE_NOT_FOUND",3:"ERROR_PATH_NOT_FOUND",5:"ERROR_ACCESS_DENIED",6:"ERROR_INVALID_HANDLE"};
+  MODES.ntstatus = {
+    label:"NTSTATUS и Win32",
+    make:function(){
+      if(Math.random() < 0.35){
+        var cls = pick([["00000000",0,"успех"],["40000000",1,"сведения"],["80000005",2,"предупреждение"],["80000003",2,"предупреждение"],["C0000005",3,"ошибка"],["C0000034",3,"ошибка"]]);
+        return { prompt:"Код NTSTATUS. Что он сообщает?", kind:"code", value:cls[0],
+          options:["успех","сведения — успех с примечанием","предупреждение","ошибка"], answer:cls[1],
+          why:"Смотрим на первую цифру: <code>0</code> — успех, <code>4</code> — сведения, <code>8</code> — предупреждение, <code>C</code> — ошибка. У <code>"+cls[0]+"</code> первая цифра <code>"+cls[0][0]+"</code> — "+cls[2]+"." };
+      }
+      var it = pick(NTS), codes = [2,3,5,6];
+      return { prompt:"Ядро вернуло этот NTSTATUS. Что покажет GetLastError?", kind:"code", value:it[0],
+        options:codes.map(function(c){ return "<code>"+c+"</code> — "+W32[c]; }), answer:codes.indexOf(it[3]),
+        why:"<code>"+it[0]+"</code> — <code>"+it[1]+"</code>, "+it[2]+". <code>kernelbase.dll</code> переводит его в Win32 <code>"+it[3]+"</code> (<code>"+W32[it[3]]+"</code>) и кладёт оба кода в TEB: в x64dbg это строки <code>LastStatus</code> и <code>LastError</code>." };
+    }
+  };
+
+  var LAYERS = ["kernel32.dll","kernelbase.dll","ntdll.dll","ntoskrnl.exe","win32u.dll","win32k…sys"];
+  var PATHQ = [
+    ["Где стоит инструкция syscall для CreateFileW?", 2, "Заглушки Native API — в <code>ntdll.dll</code>, последней остановке перед ядром."],
+    ["Какая библиотека переводит имя файла из ANSI в UTF-16 в CreateFileA?", 1, "<code>kernelbase.dll</code>: <code>CreateFileA</code> переводит строку и зовёт <code>CreateFileW</code>."],
+    ["Где лежит короткий переходник jmp по старому адресу WinAPI?", 0, "Программы исторически импортируют из <code>kernel32.dll</code>, а код многих функций переехал в <code>kernelbase.dll</code>."],
+    ["Где работает настоящая NtCreateFile, которая ищет файл?", 3, "В ядре, в <code>ntoskrnl.exe</code>. Одноимённая функция в <code>ntdll.dll</code> — только заглушка-окошко."],
+    ["Где заглушки NtUser… и NtGdi…?", 4, "<code>win32u.dll</code> — «ntdll для графики»."],
+    ["Где в ядре обслуживаются окна и графика?", 5, "Драйвер <code>win32k…sys</code>. Номера его вызовов — от <code>0x1000</code>."],
+    ["Кто переводит NTSTATUS в код Win32 для GetLastError?", 1, "<code>kernelbase.dll</code>, функцией <code>RtlNtStatusToDosError</code>."],
+    ["Где обработчик KiSystemCall64?", 3, "Это код ядра <code>ntoskrnl.exe</code>, адрес которого записан в MSR <code>LSTAR</code>."]
+  ];
+  MODES.callpath = {
+    label:"Путь вызова",
+    make:function(){
+      var it = pick(PATHQ);
+      return { prompt:"Путь системного вызова", kind:"text", value:it[0],
+        options:LAYERS.map(function(l){ return "<code>"+l+"</code>"; }), answer:it[1], why:it[2] };
+    }
+  };
+
+  var NATIVE = [
+    ["CreateFileW","NtCreateFile"],["ReadFile","NtReadFile"],["CloseHandle","NtClose"],
+    ["VirtualAlloc","NtAllocateVirtualMemory"],["Sleep","NtDelayExecution"],["ResetEvent","NtClearEvent"]
+  ];
+  MODES.native = {
+    label:"WinAPI → Native",
+    make:function(){
+      var it = pick(NATIVE);
+      var others = shuffle(NATIVE.filter(function(x){ return x!==it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Какая функция Native API уходит в ядро?", kind:"code", value:it[0],
+        options:all.map(function(x){ return "<code>"+x[1]+"</code>"; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> в итоге зовёт заглушку <code>ntdll.dll!"+it[1]+"</code>, а та — <code>syscall</code>. Именно имена Native API ты видишь в x64dbg и в стеке Process Monitor." };
+    }
+  };
+
+  var TERMS28 = [
+    ["stub","заглушка","стаб"], ["system service number","номер системного вызова","сúстем сёрвис нáмбер"],
+    ["native API","родной API Windows","нéйтив эй-пи-áй"], ["trap frame","ловушечный кадр","трэп фрейм"],
+    ["previous mode","предыдущий режим","прúвиэс мóуд"], ["model-specific register","регистр настроек процессора (MSR)","мóдел спесúфик рéджистер"],
+    ["service table","таблица системных сервисов","сёрвис тэйбл"], ["volatile register","изменчивый регистр","вóлатайл рéджистер"]
+  ];
+  MODES.terms28 = {
+    label:"Термины вызовов",
+    make:function(){
+      var it = pick(TERMS28);
+      var others = shuffle(TERMS28.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины главы — в GLOSSARY.md, раздел «Системные вызовы»." };
+    }
+  };
+
+  var GROUPS = [
+    { ch:"1–7", title:"числа и текст", modes:["hex2dec","dec2hex","endian","ascii","signed","terms"] },
+    { ch:"27", title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
+    { ch:"28", title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" }
+  ];
+  GROUPS.forEach(function(g){
+    if(!g.mix) return;
+    MODES[g.mix] = { label:"Всё вперемешку", make:function(){ return MODES[pick(g.modes)].make(); } };
+  });
+
+  /* ───────── движок ───────── */
+
+  var cur = "hex2dec", task = null, answered = false, timer = null;
+  var st = { total:0, right:0, streak:0, best:0, modes:{} };
+
+  try {
+    var saved = localStorage.getItem("rev-trainer");
+    if(saved){ var p = JSON.parse(saved); for(var k in p) st[k] = p[k]; }
+    if(!st.modes) st.modes = {};
+    var last = localStorage.getItem("rev-trainer-mode");
+    if(last && MODES[last]) cur = last;
+  } catch(e){}
+
+  var $ = function(id){ return document.getElementById(id); };
+  var elGroups=$("groups"), elPrompt=$("prompt"), elValue=$("value"),
+      elAns=$("answer"), elFb=$("feedback"), elForm=$("form"), elChoices=$("choices");
+  var modeButtons = {};
+
+  GROUPS.forEach(function(g){
+    var box = document.createElement("div");
+    var lab = document.createElement("span");
+    lab.className = "group-label";
+    lab.innerHTML = '<span class="ch">гл. '+g.ch+'</span> · '+g.title;
+    var row = document.createElement("div");
+    row.className = "modes";
+    var list = g.modes.slice(); if(g.mix) list.push(g.mix);
+    list.forEach(function(k){
+      var b = document.createElement("button");
+      b.type="button"; b.className = "mode" + (k===g.mix ? " mix" : "");
+      b.textContent = MODES[k].label;
+      b.addEventListener("click", function(){ cur = k; syncModes(); next(); });
+      row.appendChild(b); modeButtons[k] = b;
+    });
+    box.appendChild(lab); box.appendChild(row);
+    elGroups.appendChild(box);
+  });
+
+  function syncModes(){
+    for(var k in modeButtons) modeButtons[k].setAttribute("aria-pressed", k===cur ? "true":"false");
+    try{ localStorage.setItem("rev-trainer-mode", cur); }catch(e){}
+  }
+
+  function save(){ try{ localStorage.setItem("rev-trainer", JSON.stringify(st)); }catch(e){} }
+
+  function stats(){
+    $("s-streak").textContent = st.streak;
+    $("s-total").textContent = st.total;
+    $("s-acc").textContent = st.total ? Math.round(st.right/st.total*100)+"%" : "—";
+    var m = st.modes[cur];
+    $("s-mode").textContent = m && m.t ? m.r+"/"+m.t : "—";
+    $("s-mode-l").textContent = "режим «"+MODES[cur].label+"»";
+  }
+
+  function next(){
+    if(timer){ clearTimeout(timer); timer = null; }
+    task = MODES[cur].make();
+    answered = false;
+    elPrompt.textContent = task.prompt;
+    elValue.textContent = task.value;
+    elValue.className = "value" + (task.kind==="asm" ? " asm" : task.kind==="text" ? " text" : "");
+    elFb.innerHTML = "";
+    if(task.options){
+      elForm.hidden = true; elChoices.hidden = false;
+      elChoices.innerHTML = "";
+      task.options.forEach(function(o,i){
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "choice";
+        b.innerHTML = '<span class="k">'+(i+1)+'</span><span>'+o+'</span>';
+        b.addEventListener("click", function(){ choose(i); });
+        elChoices.appendChild(b);
+      });
+      stats();
+    } else {
+      elForm.hidden = false; elChoices.hidden = true;
+      elAns.value = "";
+      elAns.focus();
+      stats();
+    }
+  }
+
+  function record(ok){
+    st.total++;
+    var m = st.modes[cur] || (st.modes[cur] = { t:0, r:0 });
+    m.t++;
+    if(ok){ st.right++; m.r++; st.streak++; if(st.streak>st.best) st.best=st.streak; }
+    else { st.streak = 0; }
+    save(); stats();
+  }
+
+  function showFeedback(ok, head, why, withNext){
+    var d = document.createElement("div");
+    d.className = "feedback " + (ok ? "ok" : "bad");
+    d.innerHTML = '<span class="head">'+head+'</span><span class="why">'+why+'</span>';
+    if(withNext){
+      var n = document.createElement("button");
+      n.type = "button"; n.className = "next"; n.textContent = "Дальше →";
+      n.addEventListener("click", next);
+      d.appendChild(n);
+    }
+    elFb.innerHTML = ""; elFb.appendChild(d);
+    if(withNext) d.querySelector(".next").focus();
+  }
+
+  function choose(i){
+    if(answered || !task || !task.options) return;
+    answered = true;
+    var ok = i === task.answer;
+    var bs = elChoices.querySelectorAll(".choice");
+    for(var j=0;j<bs.length;j++){
+      bs[j].disabled = true;
+      if(j === task.answer) bs[j].classList.add("right");
+      else if(j === i) bs[j].classList.add("wrong");
+    }
+    record(ok);
+    showFeedback(ok, ok ? "Верно" : "Неверно. Правильно: "+task.options[task.answer], task.why, true);
+  }
+
+  elForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    if(!task || task.options || answered) return;
+    if(!elAns.value.trim()) return;
+    var ok = false;
+    try { ok = task.check(elAns.value); } catch(err){ ok = false; }
+    answered = true;
+    record(ok);
+    if(ok){
+      showFeedback(true, "Верно", task.why(), false);
+      timer = setTimeout(next, 900);
+    } else {
+      showFeedback(false, "Неверно. Правильный ответ: <b>"+task.right+"</b>", task.why(), true);
+    }
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(e.target && e.target.tagName === "INPUT") return;
+    if(e.altKey || e.ctrlKey || e.metaKey) return;
+    if(task && task.options && !answered && /^[1-9]$/.test(e.key)){
+      var i = +e.key - 1;
+      if(i < task.options.length){ e.preventDefault(); choose(i); }
+    }
+  });
+
+  syncModes();
+  next();
+})();
+</script>
