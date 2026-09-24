@@ -657,8 +657,10 @@ SMT/Hyper-Threading даёт два логических процессора.
 
 **privileged instruction** `[прúвилиджд инстрáкшен]` — привилегированная инструкция
 Инструкция, разрешённая только в кольце 0: `hlt`, `cli`, `sti`,
-`mov cr…`, `rdmsr`, `wrmsr`, `lgdt`, `lidt`, `invlpg`, `in`, `out`.
-В кольце 3 — исключение `C0000096` (`STATUS_PRIVILEGED_INSTRUCTION`).
+`mov cr…`, `rdmsr`, `wrmsr`, `lgdt`, `lidt`, `invlpg` (а в Windows
+программам запрещены и `in`, `out`). Попытка выполнить, например,
+`hlt` или `wrmsr` в кольце 3 — исключение `C0000096`
+(`STATUS_PRIVILEGED_INSTRUCTION`).
 
 **inline assembly** `[инлайн эссéмбли]` — ассемблерная вставка
 Инструкция на ассемблере прямо в коде на C: `__asm__ volatile ("hlt");`.
