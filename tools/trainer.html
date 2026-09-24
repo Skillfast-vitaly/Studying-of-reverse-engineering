@@ -279,6 +279,29 @@
   </details>
 
   <details class="cheat">
+    <summary>Шпаргалка к главе 29 — драйвер, sc и фильтр</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>команда</th><th>что делает</th></tr>
+        <tr><td>sc create Hello type= kernel binPath= C:\drivers\Hello.sys</td><td class="t">записать службу (пробел ПОСЛЕ «=»)</td></tr>
+        <tr><td>sc start Hello</td><td class="t">загрузить: ядро зовёт DriverEntry</td></tr>
+        <tr><td>sc stop Hello</td><td class="t">выгрузить: ядро зовёт DriverUnload</td></tr>
+        <tr><td>sc delete Hello</td><td class="t">удалить службу</td></tr>
+        <tr><td>bcdedit /set testsigning on</td><td class="t">тестовый режим (Secure Boot выключен)</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Ошибки: 2 — нет файла, 577 — подпись, 1052 — нет DriverUnload, 1056 — уже запущен, 1062 — не запущен, 1073 — служба уже есть.</p>
+      <table>
+        <tr><th>уровень</th><th>номер</th><th>1 &lt;&lt; n</th></tr>
+        <tr><td>ERROR</td><td>0</td><td>0001</td></tr>
+        <tr><td>WARNING</td><td>1</td><td>0010</td></tr>
+        <tr><td>TRACE</td><td>2</td><td>0100</td></tr>
+        <tr><td>INFO</td><td>3</td><td>1000</td></tr>
+      </table>
+      <p class="sub" style="margin-top:10px">Видно, если (1 &lt;&lt; уровень) &amp; (маска | 1) ≠ 0. <code>DriverEntry</code>: процесс System (PID 4), <code>PASSIVE_LEVEL</code>. <code>DriverUnload</code> — смещение <code>0x68</code>. <code>UNICODE_STRING.Length</code> — в байтах.</p>
+    </div>
+  </details>
+
+  <details class="cheat">
     <summary>Шпаргалка к главе 32 — резка адреса и биты записи</summary>
     <div class="cheat-body">
       <table>
@@ -337,7 +360,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–28, 32–34, 40 и приложения П1–П4.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–29, 32–34, 40 и приложения П1–П4.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -2160,6 +2183,105 @@
   MODES.law40 = { label:"Закон в работе",
     make:function(){ return fixed(LAW40, "Так можно?", "text", ["можно","нельзя"]); } };
 
+  /* ── гл. 29: первый драйвер ── */
+
+  var LVL29 = ["ERROR","WARNING","TRACE","INFO"];
+  function bin4(n){ var s = n.toString(2); while(s.length < 4) s = "0"+s; return s; }
+  MODES.filt29 = {
+    label:"Фильтр DbgPrintEx",
+    make:function(){
+      var mask = ri(0, 15), lv = ri(0, 3), eff = mask | 1, bit = 1 << lv, ok = (bit & eff) !== 0;
+      return { prompt:"В реестре маска фильтра IHVDRIVER = 0x"+hex(mask)+". Увидит ли DebugView сообщение?", kind:"code",
+        value:"DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_"+LVL29[lv]+"_LEVEL, ...)",
+        options:["Да, увидит","Нет, фильтр выбросит"], answer: ok ? 0 : 1,
+        why:"Уровень "+LVL29[lv]+" = "+lv+" → маска уровня 1 &lt;&lt; "+lv+" = "+bin4(bit)+". Маска фильтра "+bin4(mask)+
+            " плюс системная 0001 через ИЛИ = "+bin4(eff)+". "+bin4(bit)+" &amp; "+bin4(eff)+" = "+bin4(bit & eff)+
+            (ok ? " — не ноль, сообщение проходит." : " — ноль, сообщение выброшено.")+" Раздел 29.5, упражнение 29.3." };
+    }
+  };
+
+  var DRVOBJ29 = [
+    ["DeviceObject", 0x08, "после двух CSHORT (4 байта) дыра до 8: указателю нужно кратное 8"],
+    ["Flags", 0x10, "сразу после указателя DeviceObject (0x08 + 8)"],
+    ["DriverStart", 0x18, "Flags (ULONG, 4 байта) кончается на 0x14, дыра до 0x18"],
+    ["DriverSize", 0x20, "сразу после указателя DriverStart (0x18 + 8)"],
+    ["DriverSection", 0x28, "DriverSize (4 байта) кончается на 0x24, дыра до 0x28"],
+    ["DriverExtension", 0x30, "0x28 + 8"],
+    ["DriverName", 0x38, "0x30 + 8; это UNICODE_STRING, 16 байт"],
+    ["HardwareDatabase", 0x48, "DriverName занимает 16 байт: 0x38 + 0x10"],
+    ["DriverInit", 0x58, "HardwareDatabase 0x48, FastIoDispatch 0x50, дальше 0x58. Ядро кладёт сюда адрес DriverEntry"],
+    ["DriverUnload", 0x68, "DriverInit 0x58, DriverStartIo 0x60, дальше 0x68 — тот самый [rbx+0x68] из раздела 29.5"],
+    ["MajorFunction[0]", 0x70, "сразу за DriverUnload: 0x68 + 8. Таблица обработчиков запросов — пригодится в главе 31"]
+  ];
+  MODES.off29 = {
+    label:"Смещения DRIVER_OBJECT",
+    make:function(){
+      var it = pick(DRVOBJ29);
+      var opts = [it[1]];
+      fill4(opts, function(s){ return pick(DRVOBJ29)[1] + (s > 50 ? s*8 : 0); });
+      opts = shuffle(opts);
+      return { prompt:"На каком смещении в DRIVER_OBJECT (x64) лежит поле?", kind:"code", value:it[0],
+        options:opts.map(function(v){ return "0x"+hex(v,2); }), answer:opts.indexOf(it[1]),
+        why:"0x"+hex(it[1],2)+": "+it[2]+". Правило выравнивания — приложение П1, полный счёт — упражнение 29.5." };
+    }
+  };
+
+  var USTR29 = ["Hello","Driver","Kernel","System","Registry","Services","MACHINE","ntoskrnl","Unload","Hyper"];
+  MODES.ustr29 = {
+    label:"Length у UNICODE_STRING",
+    make:function(){
+      var w = pick(USTR29), n = w.length;
+      var opts = shuffle([2*n, n, 2*n+2, n+1]);
+      return { prompt:"Чему равно поле Length у UNICODE_STRING с этой строкой?", kind:"code", value:'L"'+w+'"',
+        options:opts.map(String), answer:opts.indexOf(2*n),
+        why:"Length считается в БАЙТАХ и без нуля на конце. Символ UTF-16 — 2 байта: "+n+" × 2 = "+(2*n)+". "+n+" — это символы, а не байты; "+(2*n+2)+" — с нулём на конце (так считают MaximumLength, если под ноль есть место). Раздел 29.5." };
+    }
+  };
+
+  var SC29 = [
+    ["sc create Hello type=kernel binPath=C:\\drivers\\Hello.sys → вместо SUCCESS длинная справка", ["нет пробела после «=»","драйвер не подписан","файл не найден","служба уже есть"], 0, "У sc жёсткий синтаксис: пробел ПОСЛЕ знака равенства — type= kernel. Раздел 29.8."],
+    ["sc start Hello → ошибка 577", ["Windows не проверила подпись: нет тестового режима или файл не подписан","опечатка в пути к файлу","драйвер уже работает","нет DriverUnload"], 0, "577 — подпись. Проверь надпись «Тестовый режим» в углу и вкладку «Цифровые подписи» у .sys. Разделы 29.6–29.7."],
+    ["sc start Hello → ошибка 2", ["файл по binPath не найден","подпись не проверена","служба уже запущена","DriverEntry вернула ошибку"], 0, "2 — «не удаётся найти указанный файл»: опечатка в binPath или .sys не скопирован в машину."],
+    ["sc stop Hello → ошибка 1052", ["у драйвера не задан DriverUnload","драйвер не подписан","служба не создана","нет прав администратора"], 0, "Пустое поле DriverUnload — ядро считает драйвер невыгружаемым. Поможет только перезагрузка."],
+    ["sc start Hello второй раз подряд → ошибка", ["1056: одна копия службы уже запущена","577: подпись","1073: служба уже существует","2: файл не найден"], 0, "Драйвер уже в памяти. Сначала sc stop."],
+    ["sc create Hello второй раз подряд → ошибка", ["1073: служба уже существует","1056: служба уже запущена","1052: недопустимый код","577: подпись"], 0, "Служба записана в реестре. Для новой версии sc create не нужен — только заменить файл."],
+    ["bcdedit /set testsigning on → «значение защищено политикой Secure Boot»", ["в настройках виртуальной машины не выключен Secure Boot","нет прав администратора","Windows не та","нужен WDK внутри машины"], 0, "Тестовый режим не включить при включённой безопасной загрузке. Выключи её в параметрах ВМ (раздел 29.3, шаг 5)."],
+    ["Новую версию Hello.sys не удаётся скопировать с заменой: файл занят", ["старая версия ещё загружена — сначала sc stop","нет места на диске","файл не подписан","нужно sc delete"], 0, "Цикл разработки: sc stop → копирование → sc start (раздел 29.8)."]
+  ];
+  MODES.sc29 = { label:"sc и его ошибки", make:function(){ return qa(SC29, "Что случилось?", "code"); } };
+
+  var CTX29 = [
+    ["В каком процессе выполняется DriverEntry после sc start?", ["System, PID 4","в cmd.exe, откуда набрали sc","в services.exe","ни в каком: у ядра нет процессов"], 0, "Ядро загружает драйвер своим системным потоком, а системные потоки живут в процессе System (раздел 29.9)."],
+    ["На каком IRQL вызывается DriverEntry?", ["PASSIVE_LEVEL (0)","DISPATCH_LEVEL (2)","HIGH_LEVEL (15)","на любом"], 0, "Документация Microsoft гарантирует PASSIVE_LEVEL — самый обычный уровень (главы 34 и 29)."],
+    ["DriverEntry вернула STATUS_UNSUCCESSFUL. Вызовет ли ядро функцию выгрузки?", ["нет — уборка на совести самой DriverEntry","да, сразу","да, при sc stop","да, при перезагрузке"], 0, "Документация «DriverEntry Return Values»: при ошибке Unload не вызывается. Что успела сделать DriverEntry — она убирает сама (упражнение 29.4)."],
+    ["Во что компилятор превратил KeGetCurrentIrql() в 64-битном драйвере?", ["mov rdi, cr8","call KeGetCurrentIrql через импорт","syscall","rdmsr"], 0, "IRQL хранится в CR8 (глава 34) — функция стала одной инструкцией чтения регистра (раздел 29.5)."],
+    ["С каких цифр начинаются адреса кода и данных драйвера?", ["FFFF — системная половина","0000 7FF — как у DLL","0040 — как у старых .exe","случайно, с любых"], 0, "Драйвер живёт в верхней, системной половине адресов (главы 26 и 32)."],
+    ["Что стоит в поле Subsystem у файла .sys?", ["1 — Native","2 — Windows GUI","3 — Windows CUI","0 — неизвестно"], 0, "Native, как у ntoskrnl.exe: драйвер работает без WinAPI (глава 27, раздел 29.10)."],
+    ["Какой функции в ядре НЕТ?", ["printf","DbgPrintEx","PsGetCurrentProcessId","KeGetCurrentIrql"], 0, "В ядре нет стандартной библиотеки C и WinAPI. Печатают через DbgPrintEx (раздел 29.5)."],
+    ["Где обычно точка входа драйвера, собранного Visual Studio?", ["GsDriverEntry — она готовит защиту стека и зовёт DriverEntry","прямо DriverEntry","DllMain","main"], 0, "Компилятор Microsoft вставляет обвязку GsDriverEntry (раздел 29.10). Проверь в Ghidra на своём Hello.sys."],
+    ["Программа прислала драйверу буфер. Что делать первым делом после проверки адреса?", ["скопировать данные к себе под __try и работать с копией","сразу читать поля из буфера программы","поверить полю Count","записать ответ в буфер"], 0, "Правило «всё из кольца 3 — враг»: копия защищает от подмены другим потоком, __try — от исчезнувшей памяти (раздел 29.12)."]
+  ];
+  MODES.ctx29 = { label:"Где работает драйвер", make:function(){ return qa(CTX29, "Первый драйвер", "text"); } };
+
+  var TERMS29 = [
+    ["driver","драйвер","дрáйвер"], ["callback","функция обратного вызова","кóлбэк"],
+    ["unload routine","функция выгрузки","анлóуд рутúн"], ["test signing","тестовая подпись","тест сáйнинг"],
+    ["Secure Boot","безопасная загрузка","сикьюэ бут"], ["checkpoint / snapshot","снимок виртуальной машины","чéкпойнт / снэ́пшот"],
+    ["crash dump","дамп памяти после падения","крэш дамп"], ["double fetch","двойное чтение","дабл фэтч"],
+    ["Driver Kit","набор для разработки драйверов","дрáйвер кит"], ["workload","рабочая нагрузка (набор компонентов)","уóрклоуд"]
+  ];
+  MODES.terms29 = {
+    label:"Термины драйвера",
+    make:function(){
+      var it = pick(TERMS29);
+      var others = shuffle(TERMS29.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины главы — в GLOSSARY.md, раздел «Первый драйвер»." };
+    }
+  };
+
   var GROUPS = [
     { id:"g02",  ch:"0–2",   title:"основы: закон, компьютер, путь к .exe", modes:["law","bits","build"], mix:"mix02" },
     { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","endian","ascii","signed"], mix:"mix3" },
@@ -2178,6 +2300,7 @@
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
+    { id:"g29",  ch:"29",    title:"первый драйвер", modes:["filt29","off29","ustr29","sc29","ctx29","terms29"], mix:"mix29" },
     { id:"g32",  ch:"32",    title:"страничная память", modes:["idx32","entry32","pte32","canon32","pf32","cover32","terms32"], mix:"mix32" },
     { id:"g33",  ch:"33",    title:"системные регистры", modes:["crbits33","msr33","cpuid33","sel33","vt33","terms33"], mix:"mix33" },
     { id:"g34",  ch:"34",    title:"прерывания", modes:["vec34","kind34","gate34","stack34","dpl34","terms34"], mix:"mix34" },
