@@ -337,7 +337,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 26–28, 32–34 и приложение П1.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 26–28, 32–34 и приложения П1–П2.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -1341,7 +1341,7 @@
     ["stub","заглушка","стаб"], ["system service number","номер системного вызова","сúстем сёрвис нáмбер"],
     ["native API","родной API Windows","нéйтив эй-пи-áй"], ["trap frame","ловушечный кадр","трэп фрейм"],
     ["previous mode","предыдущий режим","прúвиэс мóуд"], ["model-specific register","регистр настроек процессора (MSR)","мóдел спесúфик рéджистер"],
-    ["service table","таблица системных сервисов","сёрвис тэйбл"], ["volatile register","изменчивый регистр","вóлатайл рéджистер"]
+    ["service table","таблица системных сервисов","сёрвис тэйбл"], ["volatile register","летучий регистр","вóлатайл рéджистер"]
   ];
   MODES.terms28 = {
     label:"Термины вызовов",
@@ -1800,6 +1800,77 @@
     }
   };
 
+  /* ── приложение П2: ассемблер — пишем сами ── */
+
+  var REGSP2 = [
+    ["RAX",0],["RCX",0],["RDX",0],["R8",0],["R9",0],["R10",0],["R11",0],
+    ["RBX",1],["RBP",1],["RSI",1],["RDI",1],["R12",1],["R13",1],["R14",1],["R15",1]
+  ];
+  MODES.regsp2 = {
+    label:"Летучий или сохраняемый",
+    make:function(){
+      var it = pick(REGSP2);
+      return { prompt:"Твоя функция хочет испортить этот регистр. Что ты обязан сделать?", kind:"code", value:it[0],
+        options:["ничего: он летучий, портить можно","вернуть как было к ret: он сохраняемый"], answer:it[1],
+        why:"Летучие (volatile): <code>RAX</code>, <code>RCX</code>, <code>RDX</code>, <code>R8</code>–<code>R11</code>. Сохраняемые (non-volatile): <code>RBX</code>, <code>RBP</code>, <code>RSI</code>, <code>RDI</code>, <code>R12</code>–<code>R15</code> — их <code>push</code> в начале и <code>pop</code> в обратном порядке перед <code>ret</code> (глава 12, П2.4)." };
+    }
+  };
+
+  MODES.alignp2 = {
+    label:"Выравнивание стека",
+    make:function(){
+      var n = ri(0,5), right = (n % 2) ? 32 : 40;
+      var opts = [32,40,48,24];
+      var total = 8 + n*8;
+      return { prompt:"Функция сделала столько push и вызывает функцию на C. Какой sub rsp нужен (теневое пространство + выравнивание)?", kind:"code", value:n+" × push",
+        options:opts.map(function(x){ return "<code>sub rsp, "+x+"</code>"; }), answer:opts.indexOf(right),
+        why:"При входе остаток RSP mod 16 = 8 (адрес возврата). Плюс "+n+" × 8 = "+(n*8)+" → всего "+total+", остаток "+(total%16)+". Теневых 32 байта обязательно; "+(total%16 ? "остаток 8 — нужно ещё 8: <b>40</b>." : "остаток 0 — хватит ровно <b>32</b>.")+" Правило: чётное число push → 40, нечётное → 32 (П2.6)." };
+    }
+  };
+
+  var MASMP2 = [
+    ["# комментарий", ["; комментарий","// комментарий","# комментарий","-- комментарий"], 0, "В ассемблере gcc комментарий — <code>#</code>, а <code>;</code> там разделяет инструкции. В MASM и в x64dbg комментарий — <code>;</code>."],
+    [".text", [".code",".data","SEGMENT","PROC"], 0, "Начало кода: у gcc — <code>.text</code>, у MASM — <code>.code</code>."],
+    [".globl f + метка f:", ["f PROC … f ENDP","PUBLIC f:","EXTERN f","f LABEL"], 0, "В MASM функция — <code>PROC</code>…<code>ENDP</code>, и она видна снаружи сама."],
+    [".seh_pushreg rbx", [".pushreg rbx",".savereg rbx",".allocstack rbx","push rbx"], 0, "Директива описывает <code>push rbx</code> в прологе. Сама инструкция <code>push rbx</code> пишется отдельно, строкой выше."],
+    [".seh_stackalloc 32", [".allocstack 32",".pushreg 32","sub rsp, 32",".setframe 32"], 0, "Описывает <code>sub rsp, 32</code> в прологе."],
+    [".seh_endprologue", [".endprolog","ENDP","END",".endproc"], 0, "Конец пролога. <code>ENDP</code> — конец всей функции, <code>END</code> — конец файла."],
+    [".seh_proc f", ["f PROC FRAME","f PROC","FRAME f","f ENDP"], 0, "Функция с описанием пролога — <code>PROC FRAME</code>. Просто <code>PROC</code> — для листовых функций."],
+    ["0x20", ["20h","$20","20x","&amp;H20"], 0, "В MASM шестнадцатеричные числа пишут с буквой <code>h</code> на конце: <code>20h</code>."]
+  ];
+  MODES.masmp2 = { label:"Перевод на MASM", make:function(){ return qa(MASMP2, "Как это записать в MASM (Visual Studio)?", "code"); } };
+
+  var BUGP2 = [
+    ["Компоновщик пишет «undefined reference to `add3'». Что проверить первым?", ["есть ли .globl add3 в файле .s","нет ли деления на ноль","правильно ли выравнивание","есть ли .seh_"], 0, "Без <code>.globl</code> имя остаётся внутри файла, и <code>main</code> его не находит (П2.3)."],
+    ["После вызова твоей функции цикл в main «сходит с ума», и только в -O2. Самая вероятная причина?", ["функция не вернула сохраняемый регистр","нет .seh_ директив","ошибка в printf","не хватает оперативной памяти"], 0, "Компилятор держал переменную в сохраняемом регистре и доверился правилам. Опыт с забытым RBX (П2.5)."],
+    ["Почему в my_cpuid адрес out сначала перекладывают из RDX в R8?", ["cpuid затрёт RDX","R8 быстрее","так требует компоновщик","RDX сохраняемый"], 0, "<code>cpuid</code> пишет ответ в EAX, EBX, ECX, EDX. Адрес из RDX пропал бы (П2.8)."],
+    ["Зачем my_cpuid делает push rbx?", ["cpuid портит RBX, а он сохраняемый","чтобы выровнять стек","чтобы передать аргумент","так быстрее"], 0, "Три вопроса обёртки: откуда данные, что портит, куда результат. RBX портится — значит, сохранить (П2.8)."],
+    ["rdtsc отдал EDX = 0x12, EAX = 0x34567890. Каким будет 64-битный счётчик?", ["0x0000001234567890","0x3456789000000012","0x46","0x1234567890000000"], 0, "EDX — старшая половина: <code>shl rdx, 32</code>, потом <code>or rax, rdx</code> (П2.8)."],
+    ["В snapshot поле rax сохраняется первым. Почему?", ["дальше RAX используется как черновик для RSP","так короче код","RAX всегда ноль","так требует Windows"], 0, "Правило снимка: сначала сохрани, потом пользуйся (П2.9)."],
+    ["Какой функции НЕ нужны директивы .seh_?", ["листовой: без push, без sub rsp, без call","любой функции с call","функции с push rbx","функции, которая вызывает printf"], 0, "Листовой функции описание пролога не нужно: адрес возврата у неё всегда на вершине стека (П2.7)."],
+    ["Почему в Visual Studio x64 пишут отдельный файл .asm, а не вставку в C?", ["компилятор Microsoft не поддерживает вставки ассемблера для x64","так быстрее","вставки запрещены законом","вставки работают только в Linux"], 0, "Документация Microsoft: «Inline assembly is not supported on the ARM and x64 processors» (П2.1)."]
+  ];
+  MODES.bugp2 = { label:"Ошибки и приёмы", make:function(){ return qa(BUGP2, "Ассемблер руками", "text"); } };
+
+  var TERMSP2 = [
+    ["directive","директива (указание ассемблеру)","дирéктив"], ["object file","объектный файл","óбджект файл"],
+    ["leaf function","листовая функция","лиф фáнкшен"], ["unwind data","данные раскрутки стека","анвáйнд дэйта"],
+    ["volatile","летучий (можно портить)","вóлатайл"], ["non-volatile","сохраняемый","нон-вóлатайл"],
+    ["prologue","пролог функции","прóлог"], ["shadow space","теневое пространство","шэдоу спейс"],
+    ["label","метка","лéйбл"], ["linker","компоновщик","лúнкер"]
+  ];
+  MODES.termsp2 = {
+    label:"Термины П2",
+    make:function(){
+      var it = pick(TERMSP2);
+      var others = shuffle(TERMSP2.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «Свой ассемблер»." };
+    }
+  };
+
   var GROUPS = [
     { id:"g02",  ch:"0–2",   title:"основы: закон, компьютер, путь к .exe", modes:["law","bits","build"], mix:"mix02" },
     { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","endian","ascii","signed"], mix:"mix3" },
@@ -1811,6 +1882,7 @@
     { id:"g17",  ch:"17",    title:"разбор задачи 2: пароль под XOR", modes:["xorb","xorkey","loop17"], mix:"mix17" },
     { id:"g18",  ch:"18",    title:"разбор задачи 3: серийный номер", modes:["serialok","serialletter","magicdiv","idiom18"], mix:"mix18" },
     { id:"gp1",  ch:"П1",    title:"приложение: Си — от чтения к письму", modes:["typesp1","recipep1","maskp1","structp1","termsp1"], mix:"mixp1" },
+    { id:"gp2",  ch:"П2",    title:"приложение: ассемблер — пишем сами", modes:["regsp2","alignp2","masmp2","bugp2","termsp2"], mix:"mixp2" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
