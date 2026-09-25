@@ -323,7 +323,7 @@
         <tr><td>L / G</td><td>7 / 8</td><td class="t">большая страница / глобальная</td></tr>
         <tr><td>E</td><td>63 = 0</td><td class="t">выполнять можно (XD выключен)</td></tr>
       </table>
-      <p class="sub" style="margin-top:10px">PXE/PPE/PDE/PTE = PML4E/PDPTE/PDE/PTE. Физический адрес = pfn × 0x1000 + смещение. <code>EFER</code> = d01. <code>LSTAR</code> (c0000082) → <code>nt!KiSystemCall64</code>. Bug check 0x7E: код исключения, адрес, запись, контекст.</p>
+      <p class="sub" style="margin-top:10px">PXE/PPE/PDE/PTE = PML4E/PDPTE/PDE/PTE. Физический адрес = pfn × 0x1000 + смещение. <code>EFER</code> = d01. <code>LSTAR</code> (c0000082) → <code>nt!KiSystemCall64</code>, первая инструкция — <code>swapgs</code>. <code>STAR</code> (c0000081): <code>syscall</code> → CS = биты 47–32 (0x10), SS = +8; <code>sysret</code> → CS = биты 63–48 + 16, SS = +8, оба OR 3 (0x33, 0x2B). Bug check 0x7E: код исключения, адрес, запись, контекст.</p>
     </div>
   </details>
 
