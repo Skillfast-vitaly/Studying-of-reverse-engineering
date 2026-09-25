@@ -279,6 +279,55 @@
   </details>
 
   <details class="cheat">
+    <summary>Шпаргалка к главе 29 — драйвер, sc и фильтр</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>команда</th><th>что делает</th></tr>
+        <tr><td>sc create Hello type= kernel binPath= C:\drivers\Hello.sys</td><td class="t">записать службу (пробел ПОСЛЕ «=»)</td></tr>
+        <tr><td>sc start Hello</td><td class="t">загрузить: ядро зовёт DriverEntry</td></tr>
+        <tr><td>sc stop Hello</td><td class="t">выгрузить: ядро зовёт DriverUnload</td></tr>
+        <tr><td>sc delete Hello</td><td class="t">удалить службу</td></tr>
+        <tr><td>bcdedit /set testsigning on</td><td class="t">тестовый режим (Secure Boot выключен)</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Ошибки: 2 — нет файла, 577 — подпись, 1052 — нет DriverUnload, 1056 — уже запущен, 1062 — не запущен, 1073 — служба уже есть.</p>
+      <table>
+        <tr><th>уровень</th><th>номер</th><th>1 &lt;&lt; n</th></tr>
+        <tr><td>ERROR</td><td>0</td><td>0001</td></tr>
+        <tr><td>WARNING</td><td>1</td><td>0010</td></tr>
+        <tr><td>TRACE</td><td>2</td><td>0100</td></tr>
+        <tr><td>INFO</td><td>3</td><td>1000</td></tr>
+      </table>
+      <p class="sub" style="margin-top:10px">Видно, если (1 &lt;&lt; уровень) &amp; (маска | 1) ≠ 0. <code>DriverEntry</code>: процесс System (PID 4), <code>PASSIVE_LEVEL</code>. <code>DriverUnload</code> — смещение <code>0x68</code>. <code>UNICODE_STRING.Length</code> — в байтах.</p>
+    </div>
+  </details>
+
+  <details class="cheat">
+    <summary>Шпаргалка к главе 30 — WinDbg</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>действие</th><th>x64dbg</th><th>WinDbg</th><th>команда</th></tr>
+        <tr><td class="t">продолжить</td><td>F9</td><td>F5</td><td>g</td></tr>
+        <tr><td class="t">шаг с обходом</td><td>F8</td><td>F10</td><td>p</td></tr>
+        <tr><td class="t">шаг с заходом</td><td>F7</td><td>F11</td><td>t</td></tr>
+        <tr><td class="t">выйти из функции</td><td>Ctrl+F9</td><td>Shift+F11</td><td>gu</td></tr>
+        <tr><td class="t">точка на строке</td><td>F2</td><td>F9</td><td>bp / bu</td></tr>
+        <tr><td class="t">остановить</td><td>F12</td><td>Ctrl+Break</td><td>—</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Числа — hex, <code>0n</code> — десятичные, <code>?</code> — калькулятор, <code>@rax</code> — регистр, <code>ln</code> — чей адрес. Символы: <code>.symfix</code>, <code>.sympath+ папка</code>, <code>.reload</code>. <code>k</code> — стек, <code>dt</code> — структура, <code>lm m nt</code> — модуль, <code>bl</code>/<code>bc *</code> — точки.</p>
+      <table>
+        <tr><th>буква !pte</th><th>бит</th><th>значит</th></tr>
+        <tr><td>V</td><td>0</td><td class="t">запись действует (P)</td></tr>
+        <tr><td>W / R</td><td>1</td><td class="t">можно писать / только чтение</td></tr>
+        <tr><td>U / K</td><td>2</td><td class="t">кольцо 3 можно / только ядро</td></tr>
+        <tr><td>A / D</td><td>5 / 6</td><td class="t">обращались / писали</td></tr>
+        <tr><td>L / G</td><td>7 / 8</td><td class="t">большая страница / глобальная</td></tr>
+        <tr><td>E</td><td>63 = 0</td><td class="t">выполнять можно (XD выключен)</td></tr>
+      </table>
+      <p class="sub" style="margin-top:10px">PXE/PPE/PDE/PTE = PML4E/PDPTE/PDE/PTE. Физический адрес = pfn × 0x1000 + смещение. <code>EFER</code> = d01. <code>LSTAR</code> (c0000082) → <code>nt!KiSystemCall64</code>. Bug check 0x7E: код исключения, адрес, запись, контекст.</p>
+    </div>
+  </details>
+
+  <details class="cheat">
     <summary>Шпаргалка к главе 32 — резка адреса и биты записи</summary>
     <div class="cheat-body">
       <table>
@@ -337,7 +386,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–28, 32–34, 40 и приложения П1–П4.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П4.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -2162,165 +2211,232 @@
 
   /* ── гл. 29: первый драйвер ── */
 
-  var LVL29 = [["DPFLTR_ERROR_LEVEL",0],["DPFLTR_WARNING_LEVEL",1],["DPFLTR_TRACE_LEVEL",2],["DPFLTR_INFO_LEVEL",3]];
-  MODES.filter29 = {
+  var LVL29 = ["ERROR","WARNING","TRACE","INFO"];
+  function bin4(n){ var s = n.toString(2); while(s.length < 4) s = "0"+s; return s; }
+  MODES.filt29 = {
     label:"Фильтр DbgPrintEx",
     make:function(){
-      var l = pick(LVL29), mask = pick([0x1,0x1,0x3,0x5,0x8,0xF,0x2]);
-      var bit = 1 << l[1], ok = (bit & mask) !== 0;
-      return { prompt:"Маска фильтра и уровень сообщения. Увидишь строку?", kind:"code",
-        value:"маска 0x"+hex(mask,1)+", "+l[0],
-        options:["да, строка пройдёт","нет, фильтр её отбросит"], answer: ok ? 0 : 1,
-        why:"Правило из раздела 29.5: строка проходит, если <code>(1 &lt;&lt; уровень) &amp; маска</code> не ноль. "+
-            l[0]+" = "+l[1]+", 1 &lt;&lt; "+l[1]+" = 0x"+hex(bit,1)+"; 0x"+hex(bit,1)+" &amp; 0x"+hex(mask,1)+" = 0x"+hex(bit & mask,1)+
-            (ok ? " — не ноль, видно." : " — ноль, не видно.")+" Маска по умолчанию 0x1: без правки реестра виден только ERROR_LEVEL." };
+      var mask = ri(0, 15), lv = ri(0, 3), eff = mask | 1, bit = 1 << lv, ok = (bit & eff) !== 0;
+      return { prompt:"В реестре маска фильтра IHVDRIVER = 0x"+hex(mask)+". Увидит ли DebugView сообщение?", kind:"code",
+        value:"DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_"+LVL29[lv]+"_LEVEL, ...)",
+        options:["Да, увидит","Нет, фильтр выбросит"], answer: ok ? 0 : 1,
+        why:"Уровень "+LVL29[lv]+" = "+lv+" → маска уровня 1 &lt;&lt; "+lv+" = "+bin4(bit)+". Маска фильтра "+bin4(mask)+
+            " плюс системная 0001 через ИЛИ = "+bin4(eff)+". "+bin4(bit)+" &amp; "+bin4(eff)+" = "+bin4(bit & eff)+
+            (ok ? " — не ноль, сообщение проходит." : " — ноль, сообщение выброшено.")+" Раздел 29.5, упражнение 29.3." };
     }
   };
 
   var DRVOBJ29 = [
-    ["DeviceObject", 0x08], ["Flags", 0x10], ["DriverStart", 0x18], ["DriverSize", 0x20],
-    ["DriverName", 0x38], ["DriverInit", 0x58], ["DriverUnload", 0x68], ["MajorFunction", 0x70]
+    ["DeviceObject", 0x08, "после двух CSHORT (4 байта) дыра до 8: указателю нужно кратное 8"],
+    ["Flags", 0x10, "сразу после указателя DeviceObject (0x08 + 8)"],
+    ["DriverStart", 0x18, "Flags (ULONG, 4 байта) кончается на 0x14, дыра до 0x18"],
+    ["DriverSize", 0x20, "сразу после указателя DriverStart (0x18 + 8)"],
+    ["DriverSection", 0x28, "DriverSize (4 байта) кончается на 0x24, дыра до 0x28"],
+    ["DriverExtension", 0x30, "0x28 + 8"],
+    ["DriverName", 0x38, "0x30 + 8; это UNICODE_STRING, 16 байт"],
+    ["HardwareDatabase", 0x48, "DriverName занимает 16 байт: 0x38 + 0x10"],
+    ["DriverInit", 0x58, "HardwareDatabase 0x48, FastIoDispatch 0x50, дальше 0x58. Ядро кладёт сюда адрес DriverEntry"],
+    ["DriverUnload", 0x68, "DriverInit 0x58, DriverStartIo 0x60, дальше 0x68 — тот самый [rbx+0x68] из раздела 29.5"],
+    ["MajorFunction[0]", 0x70, "сразу за DriverUnload: 0x68 + 8. Таблица обработчиков запросов — пригодится в главе 31"]
   ];
-  MODES.drvobj29 = {
-    label:"Поля DRIVER_OBJECT",
+  MODES.off29 = {
+    label:"Смещения DRIVER_OBJECT",
     make:function(){
       var it = pick(DRVOBJ29);
-      var others = shuffle(DRVOBJ29.filter(function(x){ return x !== it; })).slice(0,3);
-      var all = shuffle(others.concat([it]));
+      var opts = [it[1]];
+      fill4(opts, function(s){ return pick(DRVOBJ29)[1] + (s > 50 ? s*8 : 0); });
+      opts = shuffle(opts);
       return { prompt:"На каком смещении в DRIVER_OBJECT (x64) лежит поле?", kind:"code", value:it[0],
-        options:all.map(function(x){ return "+0x"+hex(x[1],3); }), answer:all.indexOf(it),
-        why:"<code>"+it[0]+"</code> — <code>+0x"+hex(it[1],3)+"</code>. Смещения проверены компилятором и видны в WinDbg командой <code>dt nt!_DRIVER_OBJECT</code> (раздел 30.6). Главное запомнить: DriverUnload — 0x68, сразу за ним MajorFunction — 0x70." };
+        options:opts.map(function(v){ return "0x"+hex(v,2); }), answer:opts.indexOf(it[1]),
+        why:"0x"+hex(it[1],2)+": "+it[2]+". Правило выравнивания — приложение П1, полный счёт — упражнение 29.5." };
+    }
+  };
+
+  var USTR29 = ["Hello","Driver","Kernel","System","Registry","Services","MACHINE","ntoskrnl","Unload","Hyper"];
+  MODES.ustr29 = {
+    label:"Length у UNICODE_STRING",
+    make:function(){
+      var w = pick(USTR29), n = w.length;
+      var opts = shuffle([2*n, n, 2*n+2, n+1]);
+      return { prompt:"Чему равно поле Length у UNICODE_STRING с этой строкой?", kind:"code", value:'L"'+w+'"',
+        options:opts.map(String), answer:opts.indexOf(2*n),
+        why:"Length считается в БАЙТАХ и без нуля на конце. Символ UTF-16 — 2 байта: "+n+" × 2 = "+(2*n)+". "+n+" — это символы, а не байты; "+(2*n+2)+" — с нулём на конце (так считают MaximumLength, если под ноль есть место). Раздел 29.5." };
     }
   };
 
   var SC29 = [
-    ["sc start Hello → ошибка 2", ["файл не найден: опечатка в binPath или .sys не скопирован","тестовый режим не включён","служба уже запущена","у драйвера нет DriverUnload"], 0, "Ошибка 2 — «не удаётся найти указанный файл» (раздел 29.8)."],
-    ["sc start Hello → ошибка 577", ["Windows не проверила подпись: нет тестового режима или файл не подписан","файл не найден","служба уже существует","служба уже запущена"], 0, "577 — подпись. Проверь bcdedit /set testsigning on и надпись «Тестовый режим»."],
-    ["sc stop Hello → ошибка 1052", ["у драйвера пустое поле DriverUnload","файл занят","служба уже запущена","нет прав администратора"], 0, "1052 — «управляющий код недопустим»: выгрузить нельзя, ядро не знает функции выгрузки."],
-    ["sc start Hello второй раз подряд → ошибка", ["1056: одна копия службы уже запущена","1073: служба уже существует","2: файл не найден","577: подпись"], 0, "1056 — драйвер уже работает."],
-    ["sc create Hello второй раз подряд → ошибка", ["1073: служба уже существует","1056: уже запущена","577: подпись","1052: нельзя остановить"], 0, "1073 — служба уже записана. create нужен один раз, дальше только start/stop."],
-    ["sc create вместо SUCCESS вывела длинную справку", ["нет пробела после = (нужно type= kernel)","нет прав администратора","тестовый режим выключен","файл не подписан"], 0, "У sc пробел обязателен после знака =, а перед ним его быть не должно."]
+    ["sc create Hello type=kernel binPath=C:\\drivers\\Hello.sys → вместо SUCCESS длинная справка", ["нет пробела после «=»","драйвер не подписан","файл не найден","служба уже есть"], 0, "У sc жёсткий синтаксис: пробел ПОСЛЕ знака равенства — type= kernel. Раздел 29.8."],
+    ["sc start Hello → ошибка 577", ["Windows не проверила подпись: нет тестового режима или файл не подписан","опечатка в пути к файлу","драйвер уже работает","нет DriverUnload"], 0, "577 — подпись. Проверь надпись «Тестовый режим» в углу и вкладку «Цифровые подписи» у .sys. Разделы 29.6–29.7."],
+    ["sc start Hello → ошибка 2", ["файл по binPath не найден","подпись не проверена","служба уже запущена","DriverEntry вернула ошибку"], 0, "2 — «не удаётся найти указанный файл»: опечатка в binPath или .sys не скопирован в машину."],
+    ["sc stop Hello → ошибка 1052", ["у драйвера не задан DriverUnload","драйвер не подписан","служба не создана","нет прав администратора"], 0, "Пустое поле DriverUnload — ядро считает драйвер невыгружаемым. Поможет только перезагрузка."],
+    ["sc start Hello второй раз подряд → ошибка", ["1056: одна копия службы уже запущена","577: подпись","1073: служба уже существует","2: файл не найден"], 0, "Драйвер уже в памяти. Сначала sc stop."],
+    ["sc create Hello второй раз подряд → ошибка", ["1073: служба уже существует","1056: служба уже запущена","1052: недопустимый код","577: подпись"], 0, "Служба записана в реестре. Для новой версии sc create не нужен — только заменить файл."],
+    ["bcdedit /set testsigning on → «значение защищено политикой Secure Boot»", ["в настройках виртуальной машины не выключен Secure Boot","нет прав администратора","Windows не та","нужен WDK внутри машины"], 0, "Тестовый режим не включить при включённой безопасной загрузке. Выключи её в параметрах ВМ (раздел 29.3, шаг 5)."],
+    ["Новую версию Hello.sys не удаётся скопировать с заменой: файл занят", ["старая версия ещё загружена — сначала sc stop","нет места на диске","файл не подписан","нужно sc delete"], 0, "Цикл разработки: sc stop → копирование → sc start (раздел 29.8)."]
   ];
-  MODES.sc29 = {
-    label:"Команды sc и ошибки",
-    make:function(){ return qa(SC29, "Что случилось?", "code"); }
-  };
+  MODES.sc29 = { label:"sc и его ошибки", make:function(){ return qa(SC29, "Что случилось?", "code"); } };
 
-  var WHERE29 = [
-    ["В каком процессе выполняется DriverEntry?", ["System, PID 4","в процессе командной строки, где набрали sc","в services.exe","ни в каком"], 0, "DriverEntry зовёт системный рабочий поток ядра, а он принадлежит процессу System (разделы 29.9 и 30.5)."],
-    ["На каком IRQL вызывается DriverEntry?", ["PASSIVE_LEVEL (0)","DISPATCH_LEVEL (2)","HIGH_LEVEL","на любом"], 0, "Документация гарантирует PASSIVE_LEVEL — на нём можно почти всё."],
-    ["Во что превратилась KeGetCurrentIrql у компилятора?", ["в чтение регистра CR8","в syscall","в чтение CR3","в вызов DbgPrintEx"], 0, "IRQL в 64-битной Windows хранится в CR8 (глава 34)."],
-    ["Что будет, если DriverEntry вернёт код ошибки?", ["драйвер выгрузят, sc start сообщит ошибку","синий экран","драйвер останется, но без DriverUnload","ничего"], 0, "Ошибка из DriverEntry — драйвер не остаётся в памяти."],
-    ["Почему в ядре нет printf?", ["printf из библиотеки кольца 3, а в ядре своя DbgPrintEx","printf слишком медленный","компилятор запрещает","в ядре нет строк"], 0, "WinAPI и CRT живут в кольце 3; у ядра свои функции из ntddk.h."],
-    ["Главное правило для данных из кольца 3", ["скопировать к себе, прочитать один раз, проверить каждое число","верить размеру из буфера","читать поле столько раз, сколько нужно","не проверять, если адрес уже проверен"], 0, "Раздел 29.12: другой поток программы может поменять буфер между проверкой и использованием."]
+  var CTX29 = [
+    ["В каком процессе выполняется DriverEntry после sc start?", ["System, PID 4","в cmd.exe, откуда набрали sc","в services.exe","ни в каком: у ядра нет процессов"], 0, "Ядро загружает драйвер своим системным потоком, а системные потоки живут в процессе System (раздел 29.9)."],
+    ["На каком IRQL вызывается DriverEntry?", ["PASSIVE_LEVEL (0)","DISPATCH_LEVEL (2)","HIGH_LEVEL (15)","на любом"], 0, "Документация Microsoft гарантирует PASSIVE_LEVEL — самый обычный уровень (главы 34 и 29)."],
+    ["DriverEntry вернула STATUS_UNSUCCESSFUL. Вызовет ли ядро функцию выгрузки?", ["нет — уборка на совести самой DriverEntry","да, сразу","да, при sc stop","да, при перезагрузке"], 0, "Документация «DriverEntry Return Values»: при ошибке Unload не вызывается. Что успела сделать DriverEntry — она убирает сама (упражнение 29.4)."],
+    ["Во что компилятор превратил KeGetCurrentIrql() в 64-битном драйвере?", ["mov rdi, cr8","call KeGetCurrentIrql через импорт","syscall","rdmsr"], 0, "IRQL хранится в CR8 (глава 34) — функция стала одной инструкцией чтения регистра (раздел 29.5)."],
+    ["С каких цифр начинаются адреса кода и данных драйвера?", ["FFFF — системная половина","0000 7FF — как у DLL","0040 — как у старых .exe","случайно, с любых"], 0, "Драйвер живёт в верхней, системной половине адресов (главы 26 и 32)."],
+    ["Что стоит в поле Subsystem у файла .sys?", ["1 — Native","2 — Windows GUI","3 — Windows CUI","0 — неизвестно"], 0, "Native, как у ntoskrnl.exe: драйвер работает без WinAPI (глава 27, раздел 29.10)."],
+    ["Какой функции в ядре НЕТ?", ["printf","DbgPrintEx","PsGetCurrentProcessId","KeGetCurrentIrql"], 0, "В ядре нет стандартной библиотеки C и WinAPI. Печатают через DbgPrintEx (раздел 29.5)."],
+    ["Где обычно точка входа драйвера, собранного Visual Studio?", ["GsDriverEntry — она готовит защиту стека и зовёт DriverEntry","прямо DriverEntry","DllMain","main"], 0, "Компилятор Microsoft вставляет обвязку GsDriverEntry (раздел 29.10). Проверь в Ghidra на своём Hello.sys."],
+    ["Программа прислала драйверу буфер. Что делать первым делом после проверки адреса?", ["скопировать данные к себе под __try и работать с копией","сразу читать поля из буфера программы","поверить полю Count","записать ответ в буфер"], 0, "Правило «всё из кольца 3 — враг»: копия защищает от подмены другим потоком, __try — от исчезнувшей памяти (раздел 29.12)."]
   ];
-  MODES.where29 = {
-    label:"Где и как работает драйвер",
-    make:function(){ return qa(WHERE29, "Первый драйвер", "text"); }
+  MODES.ctx29 = { label:"Где работает драйвер", make:function(){ return qa(CTX29, "Первый драйвер", "text"); } };
+
+  var TERMS29 = [
+    ["driver","драйвер","дрáйвер"], ["callback","функция обратного вызова","кóлбэк"],
+    ["unload routine","функция выгрузки","анлóуд рутúн"], ["test signing","тестовая подпись","тест сáйнинг"],
+    ["Secure Boot","безопасная загрузка","сикьюэ бут"], ["checkpoint / snapshot","снимок виртуальной машины","чéкпойнт / снэ́пшот"],
+    ["crash dump","дамп памяти после падения","крэш дамп"], ["double fetch","двойное чтение","дабл фэтч"],
+    ["Driver Kit","набор для разработки драйверов","дрáйвер кит"], ["workload","рабочая нагрузка (набор компонентов)","уóрклоуд"]
+  ];
+  MODES.terms29 = {
+    label:"Термины драйвера",
+    make:function(){
+      var it = pick(TERMS29);
+      var others = shuffle(TERMS29.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины главы — в GLOSSARY.md, раздел «Первый драйвер»." };
+    }
   };
 
   /* ── гл. 30: отладка ядра ── */
 
-  var KEYS30 = [
-    ["Продолжить выполнение", ["F5","F9","F10","F11"], 0, "В WinDbg продолжить — F5 или команда g. В x64dbg это было F9 — не путай."],
-    ["Шаг с обходом (step over)", ["F10","F8","F11","F5"], 0, "F10 или команда p. В x64dbg — F8."],
-    ["Шаг с заходом (step into)", ["F11","F7","F10","F9"], 0, "F11 или команда t. В x64dbg — F7."],
-    ["Выйти из текущей функции (step out)", ["Shift+F11","Ctrl+F9","F12","Shift+F5"], 0, "Shift+F11 или команда gu. В x64dbg — Ctrl+F9."],
-    ["Поставить точку останова на строке", ["F9","F2","F5","F10"], 0, "В WinDbg F9 — точка останова! В x64dbg F9 — запуск. Самая частая путаница."],
-    ["Остановить всю Windows", ["Ctrl+Break или кнопка Break","F12","Ctrl+C в окне машины","Esc"], 0, "Break на вкладке Home. Документация упоминает ещё Ctrl+Scroll Lock."]
-  ];
-  MODES.keys30 = {
-    label:"Клавиши WinDbg",
-    make:function(){ return qa(KEYS30, "Какая клавиша в WinDbg?", "text"); }
-  };
-
   var CMD30 = [
-    ["Показать список модулей ядра", ["lm","bl","dv","k"], 0, "lm — list modules. bl — список точек останова."],
-    ["Поставить точку останова на функцию драйвера, который ещё не загружен", ["bu Hello!DriverEntry","bp Hello!DriverEntry","g Hello!DriverEntry","ln Hello!DriverEntry"], 0, "bu — неразрешённая точка на имя, включится при загрузке модуля. bp нужен адрес уже загруженного кода."],
-    ["Показать стек вызовов", ["k","r","u","lm"], 0, "k (и kn — с номерами строк)."],
-    ["Узнать, какой функции принадлежит адрес", ["ln адрес","u адрес","dt адрес","lm адрес"], 0, "ln — list nearest symbols."],
-    ["Показать поля структуры со смещениями", ["dt nt!_DRIVER_OBJECT","dv","!idt","bl"], 0, "dt — display type."],
-    ["Показать локальные переменные функции", ["dv","dt","lm","k"], 0, "dv — display variables. Внутрь структуры — dx."],
-    ["Прочитать MSR", ["rdmsr c0000082","r c0000082","dt c0000082","!msr"], 0, "rdmsr номер — только в живой отладке, не в дампе."],
-    ["Записи таблиц страниц для адреса", ["!pte адрес","!vtop адрес","!idt","dg адрес"], 0, "!pte показывает PXE, PPE, PDE, PTE и флажки."],
-    ["Разобрать падение", ["!analyze -v","!process 0 0","lm","g"], 0, "!analyze -v — отчёт: модуль, функция, строка, стек."],
-    ["Подключить сервер символов Microsoft", [".sympath srv*","!sympath srv*","bu srv*","lm srv*"], 0, "Команды с точкой — команды самого отладчика. Потом .reload."],
-    ["Показать текущий процесс кратко", ["!process -1 0","!process 0 0","!thread","dv"], 0, "-1 — текущий процесс, 0 — кратко. !process 0 0 — все процессы."],
-    ["Таблица прерываний", ["!idt","dg","r idtr","!pte"], 0, "!idt печатает векторы и обработчики; r idtr — только адрес таблицы."]
+    ["g", ["продолжить выполнение цели","шаг с заходом","показать стек","остановить систему"], 0, "g — go, «иди». То же, что F5. Пока цель работает, подсказка — *BUSY*. Раздел 30.5."],
+    ["p", ["шаг с обходом вызовов","шаг с заходом внутрь","продолжить до точки останова","показать регистры"], 0, "p — procedure step, F10: call выполняется целиком. В x64dbg это F8."],
+    ["t", ["шаг с заходом внутрь функции","шаг с обходом","выйти из функции","показать потоки"], 0, "t — trace, F11: заходит внутрь call. В x64dbg это F7."],
+    ["k", ["стек вызовов","список модулей","список точек останова","регистры"], 0, "k — stack: цепочка адресов возврата, читать снизу вверх. Раздел 30.6."],
+    ["lm m nt", ["показать модуль ядра nt","загрузить модуль","выгрузить драйвер","перечитать символы"], 0, "lm — list modules, m — фильтр по маске. У ядра файл символов ntkrnlmp (или ntkrla57 при пяти уровнях таблиц)."],
+    ["bu Hello!DriverEntry", ["точка останова по имени, сработает, когда драйвер загрузится","точка останова по текущему адресу","удалить точку","показать функцию"], 0, "bu — unresolved breakpoint: отладчик запоминает имя и сам ставит точку при загрузке модуля. bp для незагруженного модуля не годится."],
+    ["bl", ["список точек останова","удалить все точки","показать байты","список модулей"], 0, "bl — breakpoint list. e — включена, u — ещё не разрешена."],
+    ["bc *", ["удалить все точки останова","показать все точки","выключить отладку","продолжить"], 0, "bc — breakpoint clear. Правило стенда: bl перед g, лишние — bc."],
+    [".symfix", ["настроить путь символов на сервер Microsoft","перезагрузить цель","исправить драйвер","показать символы модуля"], 0, "Команды с точкой настраивают сам отладчик. .symfix — сервер символов Microsoft с кэшем на диске."],
+    [".sympath+ C:\\...\\x64\\Debug", ["добавить папку со своим .pdb к пути символов","заменить путь символов","собрать драйвер","открыть исходник"], 0, "Плюс — «добавить», а не заменить. После изменения — .reload."],
+    ["? 0x68 + 8", ["вычислить выражение","показать память по адресу 0x70","поставить точку","записать число в память"], 0, "? — калькулятор: Evaluate expression: 112 = 00000000`00000070."],
+    ["ln fffff807`1c6b2180", ["найти символ, ближайший к адресу","показать строку исходника","дизассемблировать","прочитать MSR"], 0, "ln — list nearest symbols: по адресу из LSTAR покажет nt!KiSystemCall64. Раздел 30.7."],
+    ["dt nt!_DRIVER_OBJECT @rcx", ["разложить память по полям структуры","показать тип регистра","изменить структуру","показать дизассемблер"], 0, "dt — display type: берёт устройство структуры из символов. Смещения — те же, что в упражнении 29.5."],
+    ["rdmsr c0000080", ["прочитать регистр MSR IA32_EFER","записать EFER","показать CR0","перезагрузить цель"], 0, "rdmsr — только живая отладка. EFER обычно d01: SCE, LME, LMA, NXE."],
+    ["!pte адрес", ["показать записи таблиц страниц для адреса","показать процесс","показать IDT","показать физическую память"], 0, "Четыре столбца: PXE, PPE, PDE, PTE = PML4E, PDPTE, PDE, PTE из главы 32."],
+    ["!idt", ["показать таблицу прерываний","показать GDT","показать IRQL","показать дескрипторы TSS"], 0, "Обработчики nt!Ki…, приписка Stack = … — стеки IST. Раздел 30.9."],
+    ["!analyze -v", ["подробный разбор падения","список модулей","перезагрузка цели","поиск строки в памяти"], 0, "Главная команда для bug check и дампа: IMAGE_NAME, SYMBOL_NAME, FAULTING_SOURCE_LINE."],
+    ["ed nt!Kd_IHVDRIVER_Mask 0xF", ["открыть фильтр DbgPrintEx для всех уровней до перезагрузки","выключить сообщения драйверов","поставить точку на DbgPrintEx","изменить реестр"], 0, "ed — записать 4 байта. Маска Kd_ + компонент + _Mask — переменная ядра. Раздел 30.6."]
   ];
-  MODES.cmd30 = {
-    label:"Команды WinDbg",
-    make:function(){ return qa(CMD30, "Какая команда нужна?", "text"); }
+  MODES.cmd30 = { label:"Команды WinDbg", make:function(){ return qa(CMD30, "Что делает эта команда WinDbg?", "code"); } };
+
+  var KEYS30 = [
+    ["продолжить выполнение (x64dbg: F9)", 0, "В WinDbg — F5, команда g."],
+    ["шаг с обходом (x64dbg: F8)", 1, "В WinDbg — F10, команда p."],
+    ["шаг с заходом (x64dbg: F7)", 2, "В WinDbg — F11, команда t."],
+    ["точка останова на строке (x64dbg: F2)", 3, "В WinDbg — F9. Та же F9 в x64dbg значит «Run» — частая путаница."],
+    ["выйти из функции (x64dbg: Ctrl+F9)", 4, "В WinDbg — Shift+F11, команда gu (go up)."],
+    ["остановить (x64dbg: F12)", 5, "В WinDbg — Ctrl+Break (или Ctrl+Scroll Lock, или кнопка Break)."]
+  ];
+  MODES.keys30 = { label:"Клавиши WinDbg",
+    make:function(){ return fixed(KEYS30, "Какая клавиша WinDbg это делает?", "text", ["F5","F10","F11","F9","Shift+F11","Ctrl+Break"]); } };
+
+  var FL30 = [["C",9],["G",8],["L",7],["D",6],["A",5],["N",4],["T",3]];
+  function pteLetters(v){
+    var s = "";
+    FL30.forEach(function(f){ s += ((v >> BigInt(f[1])) & 1n) ? f[0] : "-"; });
+    s += ((v >> 2n) & 1n) ? "U" : "K";
+    s += ((v >> 1n) & 1n) ? "W" : "R";
+    s += ((v >> 63n) & 1n) ? "-" : "E";
+    s += (v & 1n) ? "V" : "-";
+    return s;
+  }
+  MODES.pte30 = {
+    label:"Буквы !pte",
+    make:function(){
+      var pfn = BigInt(ri(0x1000, 0xFFFFF));
+      var rw = ri(0,1), us = ri(0,1), a = 1, d = rw ? ri(0,1) : 0, g = us ? 0 : ri(0,1), xd = ri(0,1);
+      var v = (BigInt(xd) << 63n) | (pfn << 12n) | (BigInt(g) << 8n) | (BigInt(d) << 6n) | (BigInt(a) << 5n) |
+              (BigInt(us) << 2n) | (BigInt(rw) << 1n) | 1n;
+      var right = pteLetters(v);
+      var cand = [right];
+      [v ^ 2n, v ^ 4n, v ^ (1n << 63n), v ^ (1n << 8n)].forEach(function(x){ var l = pteLetters(x); if(cand.indexOf(l) < 0) cand.push(l); });
+      cand = shuffle(cand.slice(0,4));
+      return { prompt:"Какие буквы покажет !pte для этой записи?", kind:"code", value:"contains "+hexB(v,16),
+        options:cand.map(function(l){ return "<code>"+l+"</code>"; }), answer:cand.indexOf(right),
+        why:"Младшие 12 бит: 0x"+hex(Number(v & 0xFFFn),3)+". Бит 2 (U/S) = "+us+" → "+(us?"U":"K")+"; бит 1 (R/W) = "+rw+" → "+(rw?"W":"R")+
+            "; бит 63 (XD) = "+xd+" → "+(xd?"«-» вместо E":"E")+"; бит 0 → V. G — бит 8, D — бит 6, A — бит 5. Таблица букв — раздел 30.8." };
+    }
   };
 
-  MODES.pte30 = {
-    label:"Флажки !pte",
+  MODES.pfn30 = {
+    label:"PFN → физический адрес",
     make:function(){
-      var P=1, RW=ri(0,1), US=ri(0,1), A=ri(0,1), D=ri(0,1), XD=ri(0,1);
-      var low = P | (RW<<1) | (US<<2) | (A<<5) | (D<<6);
-      function letters(rw,us,a,d,xd){ return "---"+(d?"D":"-")+(a?"A":"-")+"--"+(us?"U":"K")+(rw?"W":"R")+(xd?"-":"E")+"V"; }
-      var right = letters(RW,US,A,D,XD);
+      var pfn = BigInt(ri(0x100, 0x3FFFFF)), off = BigInt(ri(0, 0xFFF));
+      var right = (pfn << 12n) | off;
       var cand = [right];
-      [letters(1-RW,US,A,D,XD), letters(RW,1-US,A,D,XD), letters(RW,US,A,D,1-XD), letters(1-RW,1-US,A,D,XD)].forEach(function(s){ if(cand.indexOf(s) < 0) cand.push(s); });
-      cand = shuffle(cand.slice(0,4));
-      var val = (XD ? "8" : "0") + "0000001234" + hex(0x5000 | low, 5).slice(-5);
-      return { prompt:"Какие буквы покажет !pte для этой записи?", kind:"code", value:val,
-        options:cand.map(function(s){ return "<code>"+s+"</code>"; }), answer:cand.indexOf(right),
-        why:"Младшие биты: 0x"+hex(low,3)+". Бит 0 (P) = 1 → V. Бит 1 (R/W) = "+RW+" → "+(RW?"W":"R")+". Бит 2 (U/S) = "+US+" → "+(US?"U":"K")+
-            ". Бит 5 = "+A+(A?" → A":"")+", бит 6 = "+D+(D?" → D":"")+". Старшая цифра "+(XD?"8 — бит 63 (XD) стоит, выполнять нельзя, буквы E нет":"0 — XD = 0, выполнять можно → E")+". Раздел 30.11." };
+      [pfn << 12n, (pfn << 8n) | off, pfn + off].forEach(function(x){ if(cand.indexOf(x) < 0) cand.push(x); });
+      cand = shuffle(fill4(cand, function(s){ return right + BigInt(0x1000 * s); }));
+      return { prompt:"!pte показал pfn, адрес внутри страницы — смещение. Какой физический адрес байта?", kind:"code",
+        value:"pfn "+pfn.toString(16)+", смещение 0x"+hex(Number(off),3),
+        options:cand.map(function(x){ return "<code>0x"+x.toString(16).toUpperCase()+"</code>"; }), answer:cand.indexOf(right),
+        why:"Физический адрес страницы = PFN × 0x1000 (приписать три нуля): 0x"+(pfn << 12n).toString(16).toUpperCase()+
+            ". Плюс смещение — младшие 12 бит виртуального адреса: 0x"+right.toString(16).toUpperCase()+". Раздел 30.8." };
+    }
+  };
+
+  var REG30 = [
+    ["CR0", [[0,"PE — защищённый режим"],[16,"WP — запрет записи действует и на ядро"],[31,"PG — страничная память"]]],
+    ["CR4", [[5,"PAE — записи таблиц по 8 байт"],[7,"PGE — работает бит G"],[12,"LA57 — пять уровней таблиц"],[13,"VMXE — можно включить VT-x"],[17,"PCIDE — метки PCID в CR3"],[20,"SMEP — ядру нельзя выполнять страницы программ"]]],
+    ["EFER", [[0,"SCE — работают syscall/sysret"],[8,"LME — 64-битный режим разрешён"],[10,"LMA — 64-битный режим работает"],[11,"NXE — работает бит XD"],[12,"SVME — можно включить AMD-V"]]]
+  ];
+  MODES.bits30 = {
+    label:"Бит в регистре",
+    make:function(){
+      var r = pick(REG30), b = pick(r[1]);
+      var base = r[0] === "CR0" ? 0x80050033 : r[0] === "EFER" ? 0xD01 : pick([0x350EF8, 0x3506F8, 0x370678, 0xB50EF8, 0x1370EF8]);
+      if(ri(0,3) === 0) base = (base ^ (1 << b[0])) >>> 0;
+      var on = ((base >>> b[0]) & 1) === 1;
+      var digit = Math.floor(b[0] / 4), nib = (base >>> (digit*4)) & 15;
+      return { prompt:"Включён ли бит в этом значении регистра?", kind:"code",
+        value:"r "+r[0].toLowerCase()+" → "+hex(base>>>0)+" · бит "+b[0]+" ("+b[1].split(" — ")[0]+")",
+        options:["включён (1)","выключен (0)"], answer: on ? 0 : 1,
+        why:"Бит "+b[0]+" живёт в шестнадцатеричной цифре №"+digit+" справа (с нуля): это «"+hex(nib)+"» = "+bin4(nib)+
+            ", нужный бит — №"+(b[0]%4)+" в ней → "+(on?"1":"0")+". "+b[1]+". Метод — раздел 30.7." };
     }
   };
 
   var BUG30 = [
-    ["Что означает параметр 1 у bug check 0x7E?", ["код необработанного исключения","адрес исключения","номер процессора","IRQL"], 0, "0x7E: 1 — код исключения, 2 — адрес, 3 — запись исключения, 4 — запись контекста."],
-    ["Что означает параметр 2 у bug check 0x7E?", ["адрес, где случилось исключение","код исключения","адрес EPROCESS","размер дампа"], 0, "По нему ln или !analyze находят виновную функцию."],
-    ["Параметр 1 = FFFFFFFF80000003. Что случилось?", ["выполнилась int3 (DbgBreakPoint), а отладчика нет","запись по адресу 0","деление на ноль","недопустимая инструкция"], 0, "80000003 — STATUS_BREAKPOINT. Без отладчика точку останова некому обработать."],
-    ["Параметр 1 = FFFFFFFFC0000005. Что случилось?", ["нарушение доступа к памяти","точка останова","деление на ноль","ошибка подписи"], 0, "C0000005 — access violation, как запись по NULL в разделе 29.11."],
-    ["Что увидишь, если драйвер падает при подключённом WinDbg?", ["WinDbg остановит систему до синего экрана","ничего, машина просто перезагрузится","синий экран, WinDbg ничего не узнает","WinDbg закроется"], 0, "*** Fatal System Error — Windows отдала управление отладчику перед синим экраном."],
-    ["Какое поле !analyze -v называет строку исходника?", ["FAULTING_SOURCE_LINE_NUMBER","MODULE_NAME","IMAGE_NAME","BUGCHECK_CODE"], 0, "Строка видна, только если у WinDbg есть .pdb драйвера."],
-    ["Что нельзя делать с дампом, в отличие от живой отладки?", ["запустить дальше и читать MSR","смотреть стек","смотреть структуры","смотреть список модулей"], 0, "Дамп — фотография: g и rdmsr не работают."],
-    ["Где по умолчанию лежит автоматический дамп памяти?", ["C:\\Windows\\MEMORY.DMP","C:\\drivers\\MEMORY.DMP","C:\\Windows\\System32\\dump.bin","рядом с .sys"], 0, "%SystemRoot%\\MEMORY.DMP — по документации Microsoft."]
+    ["Первый параметр bug check 0x7E", ["код исключения, например FFFFFFFFC0000005","адрес инструкции","номер процессора","IRQL"], 0, "Для SYSTEM_THREAD_EXCEPTION_NOT_HANDLED: 1 — код исключения, 2 — адрес, 3 — запись исключения, 4 — контекст."],
+    ["Второй параметр bug check 0x7E", ["адрес инструкции, где случилось исключение","код исключения","адрес стека","номер потока"], 0, "Сверь его с lm: адрес внутри какого модуля — тот и виноват."],
+    ["Почему в FFFFFFFFC0000005 столько F?", ["32-битный код расширен до 64 бит со знаком","это адрес ядра","так пишет WinDbg для ошибок","это маска фильтра"], 0, "Старший бит C = 1100 — единица, при расширении со знаком она копируется во всю старшую половину (глава 3)."],
+    ["Строка IMAGE_NAME в !analyze -v", ["файл-модуль, в котором упало","имя процесса","имя дампа","имя пользователя"], 0, "IMAGE_NAME: Hello.sys — виноватый файл."],
+    ["Откуда !analyze -v знает номер строки исходника?", ["из полного .pdb драйвера","из дампа","с сервера Microsoft","из реестра"], 0, "Номера строк есть только в полном .pdb. У чужого драйвера строки не будет."],
+    ["Что будет с DbgBreakPoint() в драйвере без подключённого отладчика?", ["синий экран 0x7E с кодом 80000003","ничего","драйвер не загрузится с ошибкой 577","сообщение в DebugView"], 0, "int3 в ядре без отладчика обработать некому — bug check. Упражнение 30.6."],
+    ["Можно ли по дампу выполнить rdmsr?", ["нет — MSR читаются только на живой системе","да, всегда","только в малом дампе","только от администратора"], 0, "Дамп — снимок памяти, регистров MSR в нём нет. rdmsr помечен «live debugging only»."],
+    ["Какой код bug check у необработанного исключения в системном потоке?", ["0x7E","0x3B","0xD1","0x1E"], 0, "0x7E — SYSTEM_THREAD_EXCEPTION_NOT_HANDLED. DriverEntry работает в системном потоке."],
+    ["Где лежит малый дамп после синего экрана?", ["C:\\Windows\\Minidump\\","C:\\Windows\\System32\\","C:\\drivers\\","в реестре"], 0, "Малый — в Minidump, полный — C:\\Windows\\MEMORY.DMP. Для переноса на хост удобнее малый."]
   ];
-  MODES.bug30 = {
-    label:"Падения и дампы",
-    make:function(){ return qa(BUG30, "Падение драйвера", "text"); }
-  };
-
-  MODES.star30 = {
-    label:"Селекторы из STAR",
-    make:function(){
-      var k = pick([0x10, 0x08]), u = pick([0x23, 0x1B]);
-      var q = ri(0,3), names = ["CS после syscall","SS после syscall","CS после sysret","SS после sysret"];
-      var vals = [k & 0xFFFC, k + 8, (u + 16) | 3, (u + 8) | 3];
-      var right = vals[q];
-      var cand = [right];
-      [k, u, u + 16, k + 16, u + 8, (u+16)|3, (u+8)|3, k+8].forEach(function(n){ if(cand.indexOf(n) < 0 && cand.length < 4) cand.push(n); });
-      cand = shuffle(fill4(cand, function(s){ return right + 8*s; }));
-      var star = hex(u,4)+hex(k,4)+"`00000000";
-      var rule = ["биты 47–32 как есть","биты 47–32 плюс 8","биты 63–48 плюс 16, кольцо 3","биты 63–48 плюс 8, кольцо 3"][q];
-      return { prompt:"STAR = "+star+". Найди селектор: "+names[q], kind:"code", value:names[q],
-        options:cand.map(function(n){ return "0x"+hex(n,2); }), answer:cand.indexOf(right),
-        why:"По документации Intel: "+names[q]+" = "+rule+". Биты 47–32 = 0x"+hex(k,4)+", биты 63–48 = 0x"+hex(u,4)+". Ответ: 0x"+hex(right,2)+". У Windows STAR = 00230010`00000000 даёт 0x10, 0x18, 0x33, 0x2B (раздел 30.10)." };
-    }
-  };
+  MODES.bug30 = { label:"Разбор падения", make:function(){ return qa(BUG30, "Синий экран и дамп"); } };
 
   var TERMS30 = [
-    ["host","хост — машина, где работает отладчик","хóуст"], ["target","цель — машина, которую отлаживают","тáргет"],
-    ["guest","гость — система под гипервизором","гест"], ["symbol server","сервер символов","сúмбол сёрвер"],
-    ["unresolved breakpoint","неразрешённая точка останова","анризóлвд брéйкпойнт"], ["extension","расширение (команда с !)","икстéншн"],
-    ["crash dump","дамп памяти после падения","крэш дамп"], ["first chance","первый шанс","фёрст чанс"],
-    ["exact matches","точные совпадения","игзáкт мэ́чиз"], ["Page Frame Number","номер физической страницы","пейдж фрейм нáмбер"],
-    ["verbose","подробно","вёрбоус"], ["debuggee","отлаживаемая программа или система","дибаггú"]
+    ["kernel debugger","отладчик ядра","кёрнел дибáгер"], ["host","хост, машина с отладчиком","хóуст"], ["target","цель, отлаживаемая машина","тáргет"],
+    ["symbol path","путь символов","сúмбол пас"], ["unresolved breakpoint","неразрешённая точка останова","анризóлвд брéйкпойнт"],
+    ["extension","расширение отладчика","икстéншн"], ["page frame number","номер физической страницы","пейдж фрейм нáмбер"],
+    ["worker thread","рабочий поток","уóркер срэд"], ["crash dump","дамп после падения","крэш дамп"], ["key","ключ подключения","ки"],
+    ["verbose","подробно","вёрбоуз"], ["external virtual switch","внешний виртуальный коммутатор","экстёрнал вёрчуал свич"]
   ];
   MODES.terms30 = {
-    label:"Термины отладки ядра",
+    label:"Термины отладки",
     make:function(){
       var it = pick(TERMS30);
       var others = shuffle(TERMS30.filter(function(t){ return t !== it; })).slice(0,3);
       var all = shuffle(others.concat([it]));
       return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
         options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
-        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, разделы «Первый драйвер» и «Отладка ядра»." };
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины главы — в GLOSSARY.md, раздел «Отладка ядра»." };
     }
   };
 
@@ -2342,8 +2458,8 @@
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
-    { id:"g29",  ch:"29",    title:"первый драйвер", modes:["filter29","drvobj29","sc29","where29"], mix:"mix29" },
-    { id:"g30",  ch:"30",    title:"отладка ядра", modes:["keys30","cmd30","pte30","bug30","star30","terms30"], mix:"mix30" },
+    { id:"g29",  ch:"29",    title:"первый драйвер", modes:["filt29","off29","ustr29","sc29","ctx29","terms29"], mix:"mix29" },
+    { id:"g30",  ch:"30",    title:"отладка ядра", modes:["cmd30","keys30","pte30","pfn30","bits30","bug30","terms30"], mix:"mix30" },
     { id:"g32",  ch:"32",    title:"страничная память", modes:["idx32","entry32","pte32","canon32","pf32","cover32","terms32"], mix:"mix32" },
     { id:"g33",  ch:"33",    title:"системные регистры", modes:["crbits33","msr33","cpuid33","sel33","vt33","terms33"], mix:"mix33" },
     { id:"g34",  ch:"34",    title:"прерывания", modes:["vec34","kind34","gate34","stack34","dpl34","terms34"], mix:"mix34" },
