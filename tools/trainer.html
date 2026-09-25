@@ -2333,6 +2333,8 @@
     [".cxr ffffd50c`2a7ee9f0", ["взять регистры из сохранённого контекста на миг сбоя","записать регистры в дамп","стереть контекст","показать запись об исключении"], 0, "Адрес — четвёртый параметр bug check 0x7E. После .cxr r и k показывают момент сбоя; контекст держится до g. Раздел 30.11."],
     ["ed nt!Kd_IHVDRIVER_Mask 0xF", ["открыть фильтр DbgPrintEx для всех уровней до перезагрузки","выключить сообщения драйверов","поставить точку на DbgPrintEx","изменить реестр"], 0, "ed — записать 4 байта. Маска Kd_ + компонент + _Mask — переменная ядра. Раздел 30.6."]
   ];
+  CMD30.push(["u nt!KiSystemCall64 L1", ["дизассемблировать одну инструкцию — там swapgs","выгрузить модуль nt","поставить точку на KiSystemCall64","показать 1 байт памяти"], 0, "u — unassemble, L1 — одна инструкция. Первая инструкция обработчика syscall — swapgs (байты 0f 01 f8). Раздел 30.7."]);
+  CMD30.push(["rdmsr c0000081", ["прочитать STAR — селекторы для syscall и sysret","прочитать адрес обработчика syscall","прочитать EFER","записать MSR"], 0, "C0000081 — STAR, C0000082 — LSTAR, C0000080 — EFER. Раздел 30.7."]);
   MODES.cmd30 = { label:"Команды WinDbg", make:function(){ return qa(CMD30, "Что делает эта команда WinDbg?", "code"); } };
 
   var KEYS30 = [
@@ -2426,6 +2428,28 @@
   ];
   MODES.bug30 = { label:"Разбор падения", make:function(){ return qa(BUG30, "Синий экран и дамп"); } };
 
+  MODES.star30 = {
+    label:"Селекторы из STAR",
+    make:function(){
+      /* как в Windows (0x23/0x10) или придуманная раскладка: kernel — кратно 8, user — запись×8 + 3 */
+      var k = ri(0,2) === 0 ? 0x10 : 8 * ri(1,6), u = ri(0,2) === 0 ? 0x23 : 8 * ri(1,8) + 3;
+      var star = hex(u,4) + hex(k,4) + "`00000000";
+      var cases = [
+        ["syscall → CS", k & 0xFFFC, "биты 47–32 = 0x"+hex(k,4)+", AND FFFC (кольцо 0)"],
+        ["syscall → SS", k + 8, "биты 47–32 + 8 = 0x"+hex(k,2)+" + 8"],
+        ["sysret → CS (64-битная программа)", (u + 16) | 3, "биты 63–48 + 16, потом OR 3: 0x"+hex(u,2)+" + 0x10"],
+        ["sysret → SS", (u + 8) | 3, "биты 63–48 + 8, потом OR 3: 0x"+hex(u,2)+" + 8"]
+      ];
+      var c = pick(cases), right = c[1];
+      var cand = [right];
+      [k, k + 8, k + 16, (u + 16) | 3, (u + 8) | 3, u | 3, u + 24].forEach(function(x){ if(cand.length < 4 && cand.indexOf(x) < 0) cand.push(x); });
+      cand = shuffle(fill4(cand, function(s){ return right + 8 * s; }));
+      return { prompt:"Какой селектор положит процессор?", kind:"code", value:"STAR = "+star+" · "+c[0],
+        options:cand.map(function(x){ return "<code>0x"+hex(x,2)+"</code>"; }), answer:cand.indexOf(right),
+        why:c[2]+" = 0x"+hex(right,2)+". Формулы — со страниц SYSCALL и SYSRET Intel: syscall берёт биты 47–32, sysret — биты 63–48; +16 только для CS при возврате в 64-битный код, для SS всегда +8. Раздел 30.7, упражнение 30.8." };
+    }
+  };
+
   var TERMS30 = [
     ["kernel debugger","отладчик ядра","кёрнел дибáгер"], ["host","хост, машина с отладчиком","хóуст"], ["target","цель, отлаживаемая машина","тáргет"],
     ["symbol path","путь символов","сúмбол пас"], ["unresolved breakpoint","неразрешённая точка останова","анризóлвд брéйкпойнт"],
@@ -2464,7 +2488,7 @@
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
     { id:"g29",  ch:"29",    title:"первый драйвер", modes:["filt29","off29","ustr29","sc29","ctx29","terms29"], mix:"mix29" },
-    { id:"g30",  ch:"30",    title:"отладка ядра", modes:["cmd30","keys30","pte30","pfn30","bits30","bug30","terms30"], mix:"mix30" },
+    { id:"g30",  ch:"30",    title:"отладка ядра", modes:["cmd30","keys30","pte30","pfn30","bits30","star30","bug30","terms30"], mix:"mix30" },
     { id:"g32",  ch:"32",    title:"страничная память", modes:["idx32","entry32","pte32","canon32","pf32","cover32","terms32"], mix:"mix32" },
     { id:"g33",  ch:"33",    title:"системные регистры", modes:["crbits33","msr33","cpuid33","sel33","vt33","terms33"], mix:"mix33" },
     { id:"g34",  ch:"34",    title:"прерывания", modes:["vec34","kind34","gate34","stack34","dpl34","terms34"], mix:"mix34" },
