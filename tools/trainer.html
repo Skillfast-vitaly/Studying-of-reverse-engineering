@@ -385,8 +385,24 @@
     </div>
   </details>
 
+  <details class="cheat">
+    <summary>Шпаргалка к приложению П5 — IDA Pro 9.2</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>клавиша</th><th>что делает</th><th>клавиша</th><th>что делает</th></tr>
+        <tr><td>Shift+F12</td><td class="t">строки</td><td>N</td><td class="t">переименовать</td></tr>
+        <tr><td>Shift+F3</td><td class="t">функции</td><td>: / ;</td><td class="t">комментарий / повторяемый</td></tr>
+        <tr><td>Shift+F4</td><td class="t">имена</td><td>F5 / Tab</td><td class="t">псевдокод / туда и обратно</td></tr>
+        <tr><td>X</td><td class="t">кто ссылается</td><td>Space</td><td class="t">граф ↔ текст</td></tr>
+        <tr><td>G / Esc</td><td class="t">перейти / назад</td><td>Ctrl+Z / Ctrl+Y</td><td class="t">отменить / вернуть</td></tr>
+        <tr><td>F2, F9, F7, F8</td><td class="t">как в x64dbg</td><td>Ctrl+F7</td><td class="t">до возврата из функции</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0"><code>60h</code> = 0x60, <code>0Ah</code> = 0xA. <code>cs:SECRET</code> — память по адресу от RIP. <code>[rbp+var_40]</code> = <code>[rbp-0x40]</code>. <code>jnz</code> = <code>jne</code>. Имена: <code>sub_</code> функция, <code>loc_</code> место в коде, <code>off_</code> адрес, <code>unk_</code> не разобрано, <code>a…</code> строка. XREF: <code>main+7B↑r</code> — main + 7Bh, выше, читает; буквы o/r/w/p/j.</p>
+    </div>
+  </details>
+
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П4.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П5.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -2176,6 +2192,110 @@
   ];
   MODES.bookp4 = { label:"Где искать", make:function(){ return qa(BOOKP4, "Документация Intel и AMD", "text"); } };
 
+  /* ── приложение П5: IDA Pro 9.2 (клавиши сверены с таблицей Hex-Rays) ── */
+
+  var KEYSP5 = [
+    ["открыть окно строк (Strings)", ["Shift+F12","Shift+F3","Shift+F4","X"], 0, "Shift+F12 — Strings, Shift+F3 — Functions, Shift+F4 — Names. Все три есть в меню View → Open subviews (раздел П5.4)."],
+    ["открыть окно функций (Functions)", ["Shift+F3","Shift+F12","Shift+F4","F5"], 0, "Shift+F3 — Functions. Без имён там будут sub_… (раздел П5.9)."],
+    ["открыть окно всех имён (Names)", ["Shift+F4","Shift+F3","Shift+F12","N"], 0, "Shift+F4 — Names. А N — переименовать (раздел П5.4)."],
+    ["переименовать то, что под курсором", ["N","Y","X","G"], 0, "N — Rename. Y — тип, X — ссылки, G — перейти (раздел П5.7)."],
+    ["все места, которые ссылаются сюда", ["X","N","Esc","Tab"], 0, "X — окно xrefs to, главный навигатор (раздел П5.5)."],
+    ["перейти по адресу", ["G","X","Enter","Tab"], 0, "G — Jump to address. Enter прыгает по операнду под курсором."],
+    ["вернуться на прошлое место", ["Esc","Ctrl+Z","Ctrl+Enter","Tab"], 0, "Esc — назад, Ctrl+Enter — вперёд. Ctrl+Z — это отмена правки, а не переход (раздел П5.7)."],
+    ["обычный комментарий", [":",";","N","X"], 0, "Двоеточие — обычный комментарий, точка с запятой — повторяемый (раздел П5.7)."],
+    ["комментарий, видный везде, где ссылаются на это место", [";",":","N","Y"], 0, "Точка с запятой — повторяемый комментарий: напиши у SECRET — увидишь и у mov rdx, cs:SECRET (раздел П5.7)."],
+    ["декомпилировать функцию", ["F5","Tab","Space","F9"], 0, "F5 открывает окно Pseudocode. Tab — переключаться туда и обратно (раздел П5.8)."],
+    ["туда и обратно: дизассемблер ↔ псевдокод", ["Tab","F5","Space","Esc"], 0, "Tab — на то же место в другом виде (раздел П5.8)."],
+    ["граф ↔ сплошной текст", ["Space","Tab","F5","G"], 0, "Пробел переключает вид IDA View. Данные видны только в тексте (раздел П5.4)."],
+    ["отменить последнее действие", ["Ctrl+Z","Ctrl+Y","Esc","Ctrl+F2"], 0, "Ctrl+Z — отменить, Ctrl+Y — вернуть. История живёт только до закрытия IDA (раздел П5.7)."],
+    ["поставить точку останова (отладчик IDA)", ["F2","F9","F4","Ctrl+F2"], 0, "F2, как в x64dbg (раздел П5.10)."],
+    ["запустить программу под отладчиком или продолжить", ["F9","F5","F2","F8"], 0, "F9, как в x64dbg. F5 в IDA — декомпилятор, не отладчик!"],
+    ["шаг с обходом (step over)", ["F8","F7","Ctrl+F7","F4"], 0, "F8 — через вызов, F7 — внутрь (раздел П5.10)."],
+    ["выполнить до возврата из функции", ["Ctrl+F7","Ctrl+F9","F8","Ctrl+F2"], 0, "В IDA — Ctrl+F7, а в x64dbg — Ctrl+F9. Одна из немногих разных клавиш (раздел П5.10)."],
+    ["выполнить до курсора", ["F4","F2","F9","Ctrl+F7"], 0, "F4 — Run to cursor, как в x64dbg."],
+    ["завершить программу в отладчике", ["Ctrl+F2","F2","Ctrl+F7","Esc"], 0, "Ctrl+F2 — Terminate process (раздел П5.10)."],
+    ["запустить скрипт IDAPython из файла", ["Alt+F7","F9","Ctrl+F5","Shift+F12"], 0, "File → Script file, Alt+F7 (раздел П5.12)."]
+  ];
+  MODES.keysp5 = { label:"Клавиши IDA", make:function(){ return qa(KEYSP5, "Какая клавиша в IDA 9.2?", "text"); } };
+
+  function idaHex(n){ var s = n.toString(16).toUpperCase(); if(/^[A-F]/.test(s)) s = "0"+s; return s+"h"; }
+  MODES.hexp5 = {
+    label:"Числа с h",
+    make:function(){
+      var n = pick([ri(10,15), ri(16,159), ri(160,255), ri(256,4095)]);
+      var plain = n.toString(16).toUpperCase(), right = idaHex(n);
+      if(Math.random() < 0.5){
+        var opts = [right, "0x"+plain, String(n), /^[A-F]/.test(plain) ? plain+"h" : plain];
+        var all = shuffle(opts);
+        return { prompt:"Как IDA запишет это число в листинге?", kind:"code", value:"0x"+plain+"  (= "+n+" в десятичной)",
+          options:all, answer:all.indexOf(right),
+          why:"IDA пишет hex с буквой h на конце (глава 3). Если число начинается с буквы, впереди ставится 0 — иначе его не отличить от имени: <code>"+right+"</code>. <code>0x…</code> — так пишут x64dbg и Ghidra (раздел П5.6)." };
+      }
+      var opts2 = [String(n)];
+      if(/^[0-9]+$/.test(plain) && parseInt(plain,10) !== n) opts2.push(String(parseInt(plain,10)));
+      fill4(opts2, function(s){ return String(n + 16*s); });
+      var all2 = shuffle(opts2);
+      return { prompt:"Сколько это в десятичной?", kind:"code", value:"sub     rsp, "+right,
+        options:all2, answer:all2.indexOf(String(n)),
+        why:"<code>"+right+"</code> — это 0x"+plain+" = "+n+". Буква h значит «шестнадцатеричное»: прочитать «"+plain+"» как десятичное — частая ошибка (глава 3, раздел П5.6)." };
+    }
+  };
+
+  var SYNP5 = [
+    ["mov     rdx, cs:SECRET", ["прочитать 8 байт из памяти по адресу SECRET","положить в RDX адрес SECRET","прочитать регистр CS","прыгнуть на SECRET"], 0, "<code>cs:</code> — манера IDA для обращения по адресу относительно RIP: это поход в память, как <code>qword ptr [rip+…]</code>. Адрес положил бы <code>lea</code> (раздел П5.6)."],
+    ["lea     rax, [rbp+var_40]", ["положить в RAX адрес RBP − 0x40","прочитать 8 байт по адресу RBP − 0x40","положить в RAX адрес RBP + 0x40","прочитать 40 байт"], 0, "<code>var_40</code> = −40h, значит <code>rbp+var_40</code> = <code>rbp − 0x40</code>. <code>lea</code> считает адрес, в память не ходит (глава 10, раздел П5.6)."],
+    ["jnz     short loc_14000157C", ["прыжок на 14000157C, если ZF = 0 — то же, что jne","прыжок всегда","прыжок, если ZF = 1","вызов функции loc_14000157C"], 0, "<code>jnz</code> = <code>jne</code> (глава 9). <code>short</code> — короткая форма с байтом смещения, <code>loc_</code> — метка в коде (раздел П5.6)."],
+    ["lea     rax, aVveditePar ; \"Vvedite parol: \"", ["положить в RAX адрес строки «Vvedite parol: »","прочитать первые 8 байт строки в RAX","сравнить RAX со строкой","напечатать строку"], 0, "IDA подставила имя строки вместо <code>[rip+…]</code>, а сам текст показала в комментарии (раздел П5.6)."],
+    ["mov     rcx, rax        ; Str1", ["RCX — первый аргумент; имя Str1 IDA взяла из описания функции","Str1 — комментарий автора программы","в RCX кладётся текст «Str1»","IDA переименовала RAX в Str1"], 0, "IDA знает описания тысяч функций и подписывает аргументы по соглашению о вызовах (глава 12, раздел П5.6)."],
+    ["var_40          = byte ptr -40h", ["переменная на стеке по смещению −0x40 от RBP","глобальная переменная по адресу 40h","аргумент функции номер 40","байт со значением −40h"], 0, "Так IDA в начале функции перечисляет её переменные на стеке (раздел П5.6)."],
+    ["mov     rax, 665F73695F766572h", ["положить в RAX 8-байтовое число из самой инструкции","прочитать память по адресу 665F73695F766572h","положить в RAX адрес строки","сдвинуть RAX на 665F… бит"], 0, "Число стоит прямо в инструкции; objdump пишет <code>movabs</code>, IDA — <code>mov</code>. В памяти оно лежит как <code>rev_is_f</code> (глава 3, раздел П5.9)."],
+    ["SECRET          dq offset aRevIsFun2024", ["8 байт, в которых записан адрес строки","строка длиной 8 символов","смещение 8 от начала строки","код функции SECRET"], 0, "<code>dq</code> — 8 байт, <code>offset</code> — «здесь адрес». Это указатель из главы 16 (раздел П5.5)."],
+    ["aRevIsFun2024   db 'rev_is_fun_2024',0", ["строка C с нулём на конце; имя дала IDA","функция aRevIsFun2024","15 чисел без нуля на конце","комментарий"], 0, "<code>db</code> — байты, <code>a…</code> — имя строки от IDA, <code>0</code> — конец строки C (раздел П5.5)."]
+  ];
+  MODES.synp5 = { label:"Манера листинга", make:function(){ return qa(SYNP5, "Что значит эта строка IDA?", "asm"); } };
+
+  var NAMESP5 = [
+    ["sub_140007B30", ["функция без имени по адресу 140007B30","метка внутри функции","данные","строка"], 0, "<code>sub_</code> — subroutine, подпрограмма. У Ghidra это <code>FUN_</code> (раздел П5.9)."],
+    ["loc_14000157C", ["место в коде, куда ведёт прыжок","функция","указатель","неразобранный байт"], 0, "<code>loc_</code> — место в коде. У Ghidra это <code>LAB_</code> (раздел П5.1)."],
+    ["off_140008000", ["данные, где записан адрес другого места","функция","смещение внутри функции","строка"], 0, "<code>off_</code> — offset: здесь лежит адрес (раздел П5.14)."],
+    ["qword_140008000", ["8 байт данных без имени","функция","строка из 8 букв","метка"], 0, "<code>byte_</code> — 1 байт, <code>word_</code> — 2, <code>dword_</code> — 4, <code>qword_</code> — 8 (раздел П5.1)."],
+    ["unk_140009100", ["байт, который IDA ещё не разобрала: ни код, ни данные","функция","переменная на стеке","строка Unicode"], 0, "<code>unk_</code> — неразобранное. На полоске навигации такие места оливковые (раздел П5.4)."],
+    ["aVveditePar", ["строка; имя IDA составила из её текста","функция","аргумент","метка в коде"], 0, "Буква <code>a</code> и текст строки словами с большой буквы (раздел П5.5)."],
+    ["start", ["точка входа из заголовка PE, когда имени нет","функция main","начало секции .text","первая функция в файле"], 0, "Так IDA зовёт точку входа в файле без имён (раздел П5.9)."],
+    ["var_40", ["переменная на стеке по смещению −40h","глобальная переменная","аргумент номер 40","регистр"], 0, "<code>var_</code> — переменная, <code>arg_</code> — аргумент на стеке; число — смещение (раздел П5.6)."]
+  ];
+  MODES.namesp5 = { label:"Имена IDA", make:function(){ return qa(NAMESP5, "Что означает имя, которое дала IDA?", "code"); } };
+
+  var XTYPESP5 = [["r","DATA","читает это место"],["w","DATA","пишет в это место"],["o","DATA","берёт адрес этого места"],["p","CODE","вызывает это место"],["j","CODE","прыгает сюда"]];
+  MODES.xrefp5 = {
+    label:"Подписи ссылок",
+    make:function(){
+      var f = pick([["main",0x1400014D4],["sub_140007B30",0x140007B30],["start",0x140001410]]);
+      var off = ri(4, 0xF0), t = pick(XTYPESP5), up = Math.random() < 0.5;
+      var line = "; "+t[1]+" XREF: "+f[0]+"+"+hex(off)+(up ? "↑" : "↓")+t[0];
+      var q = ri(0,2);
+      if(q === 0){
+        var ea = f[1] + off, right = hex(ea);
+        var opts = [right];
+        fill4(opts, function(s){ return hex([f[1], ea+16, f[1]+off*2, ea-16, ea+1][s % 5] + 16*Math.floor(s/5)); });
+        var all = shuffle(opts);
+        return { prompt:"По какому адресу стоит инструкция, которая ссылается?", kind:"code", value:line,
+          options:all, answer:all.indexOf(right),
+          why:"<code>"+f[0]+"</code> начинается с "+hex(f[1])+", смещение "+hex(off)+"h: "+hex(f[1])+" + "+hex(off)+" = "+right+" (раздел П5.5)." };
+      }
+      if(q === 1){
+        var others = shuffle(XTYPESP5.filter(function(x){ return x !== t; })).slice(0,3);
+        var all2 = shuffle(others.concat([t]));
+        return { prompt:"Что делает с этим местом ссылающаяся инструкция?", kind:"code", value:line,
+          options:all2.map(function(x){ return x[2]+" ("+x[0]+")"; }), answer:all2.indexOf(t),
+          why:"Буква в конце — вид ссылки: <code>o</code> — адрес, <code>r</code> — чтение, <code>w</code> — запись, <code>p</code> — вызов, <code>j</code> — прыжок. Здесь <code>"+t[0]+"</code> (раздел П5.5)." };
+      }
+      return { prompt:"Где лежит ссылающееся место?", kind:"code", value:line,
+        options:["выше: по меньшему адресу","ниже: по большему адресу"], answer:up ? 0 : 1,
+        why:"Стрелка <code>↑</code> — ссылка из места выше, по меньшему адресу; <code>↓</code> — ниже. Здесь "+(up ? "↑" : "↓")+" (раздел П5.5)." };
+    }
+  };
+
   /* ── глава 40: профессия реверсера ── */
 
   var PROF40 = [
@@ -2484,6 +2604,7 @@
     { id:"gp2",  ch:"П2",    title:"приложение: ассемблер — пишем сами", modes:["regsp2","alignp2","masmp2","bugp2","termsp2"], mix:"mixp2" },
     { id:"gp3",  ch:"П3",    title:"приложение: гонки и блокировки", modes:["racep3","atomp3","rulesp3","cachep3","termsp3"], mix:"mixp3" },
     { id:"gp4",  ch:"П4",    title:"приложение: читаем документацию Intel", modes:["wordsp4","phrasep4","pseudop4","bookp4"], mix:"mixp4" },
+    { id:"gp5",  ch:"П5",    title:"приложение: IDA Pro 9.2", modes:["keysp5","hexp5","synp5","namesp5","xrefp5"], mix:"mixp5" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
