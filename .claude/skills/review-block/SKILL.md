@@ -30,6 +30,7 @@ description: Провести ревизию законченного блока
 
 ```bash
 python3 tools/check_course.py
+python3 tools/check_examples.py   # программы из глав собираются
 ```
 
 Ловит битые ссылки, незакрытые блоки кода, слипшуюся вёрстку, остатки
