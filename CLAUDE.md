@@ -975,7 +975,18 @@ tools/ida_mcp/     «Наставник IDA» — свой MCP-сервер ку
   на неё; мостик из 30 — в П2, П4 и практику; из 34 — в 29.
   Черновики `drafts/29-*.md` удалены (совпадали с главой).
   **Дальше:** П5 «IDA Pro 9.2» (скилл `write-appendix`), кусками
-  в `drafts/p5-*.md`.
+  в `drafts/p5-*.md`. **Заявка: П5 пишет сессия
+  `claude/relaxed-ptolemy-h132ca`** — другим сессиям П5 не брать.
+  Сверено для П5 веб-поиском по docs.hex-rays.com (сам сайт из облака
+  не открывается — DNS): Shift+F3/F4/F12 — Functions/Names/Strings
+  («Open subviews»); N, X, `:`, `;`, G, Esc, Enter, Ctrl+Enter,
+  Ctrl+L, Tab; F5 — Pseudocode; Space — граф/текст; отладчик F2, F9,
+  Ctrl+F2, F7, F8, Ctrl+F7, F4 (шпаргалка Hex-Rays); Alt+F7 — Script
+  file; строка команд внизу Output, кнопка слева — IDC/Python;
+  «AU: idle»; файлы базы .id0/.id1/.nam/.til, при закрытии Pack
+  database (Store/Deflate) или Don't pack; 9.0 — одна программа
+  и `.i64`; 9.2 — Qt 6.8, PySide6, Microcode Viewer. **Не сверено:**
+  клавиша Y (в 14.12 есть), точный вид листинга IDA.
 - 24.09.2026 ученик попросил: «не забывай про интерактивное обучение,
   тренажёр по каждой главе и практику». Тренажёр — артефакт
   https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf (ссылка в README).
