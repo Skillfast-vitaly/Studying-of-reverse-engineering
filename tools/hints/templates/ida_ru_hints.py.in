@@ -1,0 +1,292 @@
+# -*- coding: utf-8 -*-
+"""
+Русский подсказчик для IDA Pro 9.2 — курс реверс-инжиниринга.
+
+Что умеет:
+  * наведи мышку на строку с инструкцией в окне IDA View — всплывёт
+    подсказка по-русски: что делает инструкция, что с флагами, где
+    это в курсе;
+  * Ctrl+Alt+H — то же самое в отдельном окне, для инструкции под
+    курсором;
+  * Ctrl+Alt+K — русские комментарии ко всем строкам текущей функции
+    (свои комментарии не трогает);
+  * Ctrl+Alt+L — убрать эти комментарии.
+Все команды есть в меню Edit → Plugins → «Русский подсказчик» и в меню
+правой кнопки мыши. Включить или выключить всплывающие подсказки:
+Edit → Plugins → «Русский подсказчик: подсказки вкл/выкл».
+
+Установка — в tools/hints/README.md.
+Этот файл собран скриптом tools/hints/build_hints.py из hints_data.py.
+Руками его не правь: изменения пропадут при следующей сборке.
+"""
+
+import ida_idaapi
+import ida_kernwin
+import ida_bytes
+import ida_funcs
+import idc
+import idautils
+
+#@@DATA@@
+
+PREFIX_WORDS = ("rep", "repe", "repz", "repne", "repnz", "lock")
+MARK = "рус: "
+
+
+def resolve(mnem, text):
+    """Имя, как его показывает IDA или Ghidra, → (запись, имя, префиксы, avx)."""
+    t = " ".join((text or "").replace(",", " ").lower().split())
+    words = t.split()
+    prefixes = []
+    while words and words[0] in PREFIX_WORDS:
+        prefixes.append(words.pop(0))
+    m = (mnem or "").strip().lower()
+    if not m or m in PREFIX_WORDS:
+        m = words[0] if words else ""
+    parts = m.split(".")
+    m = parts[0]
+    for p in parts[1:]:
+        if p in PREFIX_WORDS and p not in prefixes:
+            prefixes.append(p)
+    operands = " ".join(words[1:]) if words else ""
+    avx = False
+    if m not in NAMES and m.startswith("v") and len(m) > 1:
+        m, avx = m[1:], True
+    if m == "int" and operands in ("3", "03h", "3h", "0x3"):
+        m = "int3"
+    shown = m
+    if m in ("movsd", "cmpsd"):
+        m = m + (".sse" if "xmm" in t or "ymm" in t else ".str")
+    rid = NAMES.get(m)
+    if rid is None and avx:
+        shown = "v" + shown
+    return rid, shown, prefixes, avx
+
+
+def where(ch):
+    if not ch:
+        return ("В курсе пока не разбирали. Подробности — в документации "
+                "Intel, как её читать — приложение П4.")
+    return "Где в курсе: " + ", ".join(ch) + "."
+
+
+def describe(mnem, text):
+    """Список строк подсказки или None, если это не инструкция."""
+    rid, shown, prefixes, avx = resolve(mnem, text)
+    if not shown:
+        return None
+    if rid is None:
+        return ["%s — подсказки пока нет." % shown,
+                "Добавь её в базу (tools/hints, скилл ru-hints) или найди "
+                "в документации Intel (приложение П4)."]
+    r = RECORDS[rid]
+    say = " [%s]" % r["say"] if r["say"] else ""
+    lines = ["%s — %s%s, «%s»" % ("v" + shown if avx else shown,
+                                   r["en"], say, r["ru"])]
+    if avx:
+        lines.append("Буква v впереди — новая форма AVX: то же действие "
+                     "над регистрами xmm или ymm (32 байта).")
+    lines.append(r["what"])
+    lines.append("Флаги: " + r["flags"] + ".")
+    for p in prefixes:
+        if p in PREFIXES:
+            lines.append("Префикс " + PREFIXES[p])
+    lines.append(where(r["ch"]))
+    return lines
+
+
+def short_comment(mnem, text):
+    rid, shown, prefixes, avx = resolve(mnem, text)
+    if rid is None:
+        return None
+    r = RECORDS[rid]
+    head = "".join(p + " " for p in prefixes) + ("v" + shown if avx else shown)
+    tail = " (%s)" % r["ch"][0] if r["ch"] else ""
+    return MARK + head + " — " + r["short"] + tail
+
+
+# ---------------------------------------------------------------------
+# Всё, что ниже, работает только внутри IDA.
+# ---------------------------------------------------------------------
+
+def _insn_at(ea):
+    if ea == ida_idaapi.BADADDR or not ida_bytes.is_code(ida_bytes.get_flags(ea)):
+        return None
+    return idc.print_insn_mnem(ea), idc.GetDisasm(ea)
+
+
+def describe_ea(ea):
+    insn = _insn_at(ea)
+    return describe(*insn) if insn else None
+
+
+def _show(text):
+    print(text)
+    try:
+        ida_kernwin.info(text.replace("%", "%%"))
+    except Exception:
+        ida_kernwin.warning(text)
+
+
+class _explain_ah(ida_kernwin.action_handler_t):
+    def activate(self, ctx):
+        lines = describe_ea(ida_kernwin.get_screen_ea())
+        if lines is None:
+            ida_kernwin.warning("Русский подсказчик: курсор не на инструкции.\n"
+                                "Щёлкни по строке кода в окне IDA View.")
+        else:
+            _show("\n".join(lines))
+        return 1
+
+    def update(self, ctx):
+        return ida_kernwin.AST_ENABLE_ALWAYS
+
+
+def _current_func():
+    pfn = ida_funcs.get_func(ida_kernwin.get_screen_ea())
+    if pfn is None:
+        ida_kernwin.warning("Русский подсказчик: курсор не внутри функции.")
+    return pfn
+
+
+class _comment_ah(ida_kernwin.action_handler_t):
+    def activate(self, ctx):
+        pfn = _current_func()
+        if pfn is None:
+            return 1
+        added = 0
+        for ea in idautils.FuncItems(pfn.start_ea):
+            insn = _insn_at(ea)
+            if not insn or ida_bytes.get_cmt(ea, False):
+                continue
+            c = short_comment(*insn)
+            if c and ida_bytes.set_cmt(ea, c, False):
+                added += 1
+        print("Русский подсказчик: добавлено комментариев: %d" % added)
+        ida_kernwin.refresh_idaview_anyway()
+        return 1
+
+    def update(self, ctx):
+        return ida_kernwin.AST_ENABLE_ALWAYS
+
+
+class _uncomment_ah(ida_kernwin.action_handler_t):
+    def activate(self, ctx):
+        pfn = _current_func()
+        if pfn is None:
+            return 1
+        removed = 0
+        for ea in idautils.FuncItems(pfn.start_ea):
+            c = ida_bytes.get_cmt(ea, False)
+            if c and c.startswith(MARK) and ida_bytes.set_cmt(ea, "", False):
+                removed += 1
+        print("Русский подсказчик: убрано комментариев: %d" % removed)
+        ida_kernwin.refresh_idaview_anyway()
+        return 1
+
+    def update(self, ctx):
+        return ida_kernwin.AST_ENABLE_ALWAYS
+
+
+class _toggle_ah(ida_kernwin.action_handler_t):
+    def __init__(self, ctx_obj):
+        ida_kernwin.action_handler_t.__init__(self)
+        self.ctx_obj = ctx_obj
+
+    def activate(self, ctx):
+        self.ctx_obj.toggle_hints()
+        return 1
+
+    def update(self, ctx):
+        return ida_kernwin.AST_ENABLE_ALWAYS
+
+
+class _hooks_t(ida_kernwin.UI_Hooks):
+    def __init__(self, ctx_obj):
+        ida_kernwin.UI_Hooks.__init__(self)
+        self.ctx_obj = ctx_obj
+
+    def get_custom_viewer_hint(self, viewer, place):
+        if not self.ctx_obj.hints_on or place is None:
+            return None
+        try:
+            if ida_kernwin.get_widget_type(viewer) != ida_kernwin.BWN_DISASM:
+                return None
+            lines = describe_ea(place.toea())
+        except Exception:
+            return None
+        if not lines:
+            return None
+        return ("\n".join(lines), len(lines))
+
+    def finish_populating_widget_popup(self, widget, popup, ctx=None):
+        if ida_kernwin.get_widget_type(widget) == ida_kernwin.BWN_DISASM:
+            for name, _, _, _ in ACTIONS:
+                ida_kernwin.attach_action_to_popup(widget, popup, name,
+                                                   "Русский подсказчик/")
+
+
+ACTIONS = [
+    ("ru_hints:explain", "Объяснить инструкцию", "Ctrl+Alt+H", "explain"),
+    ("ru_hints:comment", "Русские комментарии к функции", "Ctrl+Alt+K", "comment"),
+    ("ru_hints:uncomment", "Убрать русские комментарии", "Ctrl+Alt+L", "uncomment"),
+]
+TOGGLE = "ru_hints:toggle"
+
+
+class ru_hints_ctx_t(ida_idaapi.plugmod_t):
+    def __init__(self):
+        # Базовый __init__ не вызываем — так в примерах Hex-Rays для 9.2
+        # (examples/misc/merge/py_mex1.py).
+        self.hints_on = True
+        handlers = {"explain": _explain_ah(), "comment": _comment_ah(),
+                    "uncomment": _uncomment_ah()}
+        for name, label, hotkey, kind in ACTIONS:
+            ida_kernwin.unregister_action(name)
+            ida_kernwin.register_action(ida_kernwin.action_desc_t(
+                name, "Русский подсказчик: " + label, handlers[kind], hotkey,
+                label))
+            ida_kernwin.attach_action_to_menu("Edit/Plugins/", name,
+                                              ida_kernwin.SETMENU_APP)
+        ida_kernwin.unregister_action(TOGGLE)
+        ida_kernwin.register_action(ida_kernwin.action_desc_t(
+            TOGGLE, "Русский подсказчик: подсказки вкл/выкл", _toggle_ah(self)))
+        ida_kernwin.attach_action_to_menu("Edit/Plugins/", TOGGLE,
+                                          ida_kernwin.SETMENU_APP)
+        self.hooks = _hooks_t(self)
+        self.hooks.hook()
+        print("Русский подсказчик загружен: наведи мышку на инструкцию, "
+              "Ctrl+Alt+H — объяснить, Ctrl+Alt+K — комментарии к функции.")
+
+    def toggle_hints(self):
+        self.hints_on = not self.hints_on
+        print("Русский подсказчик: всплывающие подсказки %s"
+              % ("включены" if self.hints_on else "выключены"))
+
+    def run(self, arg):
+        self.toggle_hints()
+        return True
+
+    def __del__(self):
+        try:
+            self.hooks.unhook()
+            for name, _, _, _ in ACTIONS:
+                ida_kernwin.unregister_action(name)
+            ida_kernwin.unregister_action(TOGGLE)
+        except Exception:
+            pass
+
+
+class ru_hints_plugin_t(ida_idaapi.plugin_t):
+    flags = ida_idaapi.PLUGIN_MULTI
+    comment = "Русские подсказки по инструкциям x86-64 (курс реверса)"
+    help = "Наведи мышку на инструкцию; Ctrl+Alt+H — объяснить"
+    wanted_name = "Русский подсказчик: подсказки вкл/выкл (запуск)"
+    wanted_hotkey = ""
+
+    def init(self):
+        return ru_hints_ctx_t()
+
+
+def PLUGIN_ENTRY():
+    return ru_hints_plugin_t()

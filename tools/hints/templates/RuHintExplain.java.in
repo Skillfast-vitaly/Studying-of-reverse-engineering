@@ -1,0 +1,38 @@
+// Русский подсказчик: объяснить инструкцию под курсором.
+// Курс реверс-инжиниринга, Ghidra 12.1. Установка — tools/hints/README.md.
+// Файл собран скриптом tools/hints/build_hints.py — руками не правь.
+//@category Русский подсказчик
+//@keybinding ctrl alt H
+//@menupath Tools.Русский подсказчик.Объяснить инструкцию
+import java.util.*;
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.listing.Instruction;
+
+public class RuHintExplain extends GhidraScript {
+
+	@Override
+	public void run() throws Exception {
+		if (currentProgram == null || currentAddress == null) {
+			popup("Русский подсказчик: сначала открой программу и щёлкни по строке кода.");
+			return;
+		}
+		Instruction ins = currentProgram.getListing().getInstructionContaining(currentAddress);
+		if (ins == null) {
+			popup("Русский подсказчик: курсор не на инструкции.\n"
+				+ "Щёлкни по строке кода в окне Listing.");
+			return;
+		}
+		List<String> lines = describe(ins.getMnemonicString(), ins.toString());
+		if (lines == null) {
+			popup("Русский подсказчик: не понял, что это за инструкция.");
+			return;
+		}
+		String text = String.join("\n", lines);
+		println(ins.getAddress() + "  " + ins);
+		println(text);
+		popup(text);
+	}
+
+//@@COMMON@@
+}

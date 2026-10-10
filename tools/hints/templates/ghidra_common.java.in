@@ -1,0 +1,128 @@
+	// ---------------------------------------------------------------
+	// Общая часть подсказчика. Собрана build_hints.py из hints_data.py;
+	// та же логика — в плагине для IDA (ida/ru_hints.py).
+	// Русские буквы в этом файле записаны числовыми кодами Юникода,
+	// чтобы Ghidra читала скрипт одинаково при любой кодировке Windows.
+	// ---------------------------------------------------------------
+
+	static final String MARK = "рус: ";
+	static final Map<String, String[]> RECORDS = new HashMap<>();
+	static final Map<String, String> NAMES = new HashMap<>();
+	static final Map<String, String> PREFIXES = new HashMap<>();
+	static final Set<String> PREFIX_WORDS =
+		new HashSet<>(Arrays.asList("rep", "repe", "repz", "repne", "repnz", "lock"));
+
+	// Запись: en, say, ru, what, flags, short, ch (разделы через запятую или пусто)
+	static void rec(String id, String en, String say, String ru, String what,
+			String flags, String shortText, String ch) {
+		RECORDS.put(id, new String[] { en, say, ru, what, flags, shortText, ch });
+	}
+
+	static void name(String name, String id) {
+		NAMES.put(name, id);
+	}
+
+//@@DATA@@
+
+	/** Результат разбора: запись, показанное имя, префиксы, AVX. */
+	static final class Resolved {
+		String id;
+		String shown;
+		List<String> prefixes = new ArrayList<>();
+		boolean avx;
+	}
+
+	static Resolved resolve(String mnem, String text) {
+		Resolved res = new Resolved();
+		String t = String.join(" ",
+			(text == null ? "" : text).replace(",", " ").toLowerCase().trim().split("\\s+"));
+		List<String> words = new ArrayList<>(
+			Arrays.asList(t.isEmpty() ? new String[0] : t.split(" ")));
+		while (!words.isEmpty() && PREFIX_WORDS.contains(words.get(0))) {
+			res.prefixes.add(words.remove(0));
+		}
+		String m = mnem == null ? "" : mnem.trim().toLowerCase();
+		if (m.isEmpty() || PREFIX_WORDS.contains(m)) {
+			m = words.isEmpty() ? "" : words.get(0);
+		}
+		String[] parts = m.split("\\.");
+		m = parts.length > 0 ? parts[0] : "";
+		for (int i = 1; i < parts.length; i++) {
+			if (PREFIX_WORDS.contains(parts[i]) && !res.prefixes.contains(parts[i])) {
+				res.prefixes.add(parts[i]);
+			}
+		}
+		String operands = words.size() > 1 ? String.join(" ", words.subList(1, words.size())) : "";
+		if (!NAMES.containsKey(m) && m.startsWith("v") && m.length() > 1) {
+			m = m.substring(1);
+			res.avx = true;
+		}
+		if (m.equals("int") && (operands.equals("3") || operands.equals("03h")
+				|| operands.equals("3h") || operands.equals("0x3"))) {
+			m = "int3";
+		}
+		res.shown = m;
+		if (m.equals("movsd") || m.equals("cmpsd")) {
+			m = m + ((t.contains("xmm") || t.contains("ymm")) ? ".sse" : ".str");
+		}
+		res.id = NAMES.get(m);
+		if (res.id == null && res.avx) {
+			res.shown = "v" + res.shown;
+		}
+		return res;
+	}
+
+	static String where(String ch) {
+		if (ch.isEmpty()) {
+			return "В курсе пока не разбирали. Подробности — в документации "
+				+ "Intel, как её читать — приложение П4.";
+		}
+		return "Где в курсе: " + ch.replace(",", ", ") + ".";
+	}
+
+	/** Строки подсказки или null, если это не инструкция. */
+	static List<String> describe(String mnem, String text) {
+		Resolved r = resolve(mnem, text);
+		if (r.shown == null || r.shown.isEmpty()) {
+			return null;
+		}
+		List<String> lines = new ArrayList<>();
+		if (r.id == null) {
+			lines.add(r.shown + " — подсказки пока нет.");
+			lines.add("Добавь её в базу (tools/hints, скилл ru-hints) или найди "
+				+ "в документации Intel (приложение П4).");
+			return lines;
+		}
+		String[] rec = RECORDS.get(r.id);
+		String say = rec[1].isEmpty() ? "" : " [" + rec[1] + "]";
+		lines.add((r.avx ? "v" + r.shown : r.shown) + " — " + rec[0] + say + ", «" + rec[2] + "»");
+		if (r.avx) {
+			lines.add("Буква v впереди — новая форма AVX: то же действие "
+				+ "над регистрами xmm или ymm (32 байта).");
+		}
+		lines.add(rec[3]);
+		lines.add("Флаги: " + rec[4] + ".");
+		for (String p : r.prefixes) {
+			if (PREFIXES.containsKey(p)) {
+				lines.add("Префикс " + PREFIXES.get(p));
+			}
+		}
+		lines.add(where(rec[6]));
+		return lines;
+	}
+
+	static String shortComment(String mnem, String text) {
+		Resolved r = resolve(mnem, text);
+		if (r.id == null) {
+			return null;
+		}
+		String[] rec = RECORDS.get(r.id);
+		StringBuilder head = new StringBuilder();
+		for (String p : r.prefixes) {
+			head.append(p).append(' ');
+		}
+		head.append(r.avx ? "v" + r.shown : r.shown);
+		String ch = rec[6];
+		String tail = ch.isEmpty() ? "" : " (" + ch.split(",")[0] + ")";
+		return MARK + head + " — " + rec[5] + tail;
+	}

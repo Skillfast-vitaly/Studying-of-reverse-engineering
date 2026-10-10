@@ -1,0 +1,60 @@
+// Русский подсказчик: русские комментарии ко всей функции или их уборка.
+// Курс реверс-инжиниринга, Ghidra 12.1. Установка — tools/hints/README.md.
+// Свои комментарии в конце строки (EOL) скрипт не трогает.
+// Файл собран скриптом tools/hints/build_hints.py — руками не правь.
+//@category Русский подсказчик
+//@keybinding ctrl alt K
+//@menupath Tools.Русский подсказчик.Комментарии к функции
+import java.util.*;
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.InstructionIterator;
+
+public class RuHintComments extends GhidraScript {
+
+	static final String ADD = "Добавить русские комментарии";
+	static final String REMOVE = "Убрать русские комментарии";
+
+	@Override
+	public void run() throws Exception {
+		if (currentProgram == null || currentAddress == null) {
+			popup("Русский подсказчик: сначала открой программу и щёлкни внутри функции.");
+			return;
+		}
+		Function f = getFunctionContaining(currentAddress);
+		if (f == null) {
+			popup("Русский подсказчик: курсор не внутри функции.");
+			return;
+		}
+		String choice = askChoice("Русский подсказчик",
+			"Что сделать с функцией " + f.getName() + "?", Arrays.asList(ADD, REMOVE), ADD);
+		boolean add = ADD.equals(choice);
+		int count = 0;
+		InstructionIterator it = currentProgram.getListing().getInstructions(f.getBody(), true);
+		while (it.hasNext() && !monitor.isCancelled()) {
+			Instruction ins = it.next();
+			Address a = ins.getAddress();
+			String old = getEOLComment(a);
+			if (add) {
+				if (old != null && !old.isEmpty()) {
+					continue;
+				}
+				String c = shortComment(ins.getMnemonicString(), ins.toString());
+				if (c != null && setEOLComment(a, c)) {
+					count++;
+				}
+			}
+			else if (old != null && old.startsWith(MARK) && setEOLComment(a, null)) {
+				count++;
+			}
+		}
+		String msg = (add ? "Добавлено" : "Убрано") + " комментариев: " + count;
+		println("Русский подсказчик: " + msg);
+		popup(msg);
+	}
+
+//@@COMMON@@
+}
