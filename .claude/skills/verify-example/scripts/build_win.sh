@@ -22,14 +22,33 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ ${#srcs[@]} -gt 0 ] || { sed -n '2,13p' "$0"; exit 2; }
-CC=x86_64-w64-mingw32-gcc
-if ! command -v $CC >/dev/null; then
-  echo "== Ставлю кросс-компилятор (раздел 4 CLAUDE.md)"
-  apt-get install -y -q gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 >/dev/null 2>&1 ||
-    { apt-get update -q >/dev/null 2>&1 && apt-get install -y -q gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 >/dev/null 2>&1; } ||
-    { echo "не удалось поставить $CC" >&2; exit 1; }
+# Где мы: облако (Linux, кросс-компилятор) или ПК ученика (Windows,
+# Git Bash, w64devkit). На ПК .exe можно запустить по-настоящему.
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*) on_windows=1 ;;
+  *) on_windows=0 ;;
+esac
+if [ $on_windows = 1 ]; then
+  # w64devkit по главе 6 лежит в C:\reverse\tools\w64devkit
+  if ! command -v gcc >/dev/null 2>&1 && [ -x /c/reverse/tools/w64devkit/bin/gcc.exe ]; then
+    PATH="/c/reverse/tools/w64devkit/bin:$PATH"
+  fi
+  CC=gcc OBJDUMP=objdump
+  if ! command -v gcc >/dev/null 2>&1 || ! gcc -dumpmachine 2>/dev/null | grep -q mingw; then
+    echo "gcc из w64devkit не найден. Глава 6: C:\\reverse\\tools\\w64devkit;" >&2
+    echo "добавь его папку bin в PATH или поставь w64devkit по главе 6" >&2
+    exit 1
+  fi
+else
+  CC=x86_64-w64-mingw32-gcc
+  if ! command -v $CC >/dev/null; then
+    echo "== Ставлю кросс-компилятор (раздел 4 CLAUDE.md)"
+    apt-get install -y -q gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 >/dev/null 2>&1 ||
+      { apt-get update -q >/dev/null 2>&1 && apt-get install -y -q gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 >/dev/null 2>&1; } ||
+      { echo "не удалось поставить $CC" >&2; exit 1; }
+  fi
+  OBJDUMP=x86_64-w64-mingw32-objdump
 fi
-OBJDUMP=x86_64-w64-mingw32-objdump
 mkdir -p "$out"
 name=$(basename "${srcs[0]}"); name=${name%.*}
 csrcs=(); for s in "${srcs[@]}"; do case "$s" in *.c) csrcs+=("$s") ;; esac; done
@@ -63,7 +82,8 @@ if [ $ok = 0 ]; then echo "   СБОРКА НЕ УДАЛАСЬ — смотри 
 [ -s "$out/$name.O0.log" ] || echo "   -O0: без предупреждений"
 for v in O0 O2s; do
   f="$out/$name.$v.exe"
-  printf '   %-22s %7d байт  %s\n' "$name.$v.exe" "$(stat -c %s "$f")" "$(file -b "$f" | cut -d, -f1-2)"
+  kind=$(file -b "$f" 2>/dev/null | cut -d, -f1-2); [ -n "$kind" ] || kind="PE (программы file нет)"
+  printf '   %-22s %7d байт  %s\n' "$name.$v.exe" "$(wc -c < "$f" | tr -d ' ')" "$kind"
 done
 
 echo
@@ -89,6 +109,12 @@ if [ -n "$asmfn" ]; then
 fi
 
 echo
+if [ $on_windows = 1 ]; then
+  echo "== Запуск на Windows (настоящий, не прогон под Linux)"
+  echo "   вход: ${input:-(пусто)}"
+  printf '%s\n' "$input" | timeout 10 "$out/$name.O0.exe"; echo "   код возврата: $?"
+  exit 0
+fi
 echo "== Прогон логики под Linux"
 if grep -qE '#include *<(windows|winternl|intrin|conio)\.h>' "${srcs[@]}"; then
   echo "   Пример завязан на Windows-заголовки — так не прогнать."

@@ -3,18 +3,40 @@
 # что лежит в других ветках, где ученик и какие главы заняты другими сессиями.
 # Ничего не меняет — только читает. Запуск из любой папки репозитория:
 #   bash .claude/skills/start-session/scripts/freshest_branch.sh
+# Работает и в облаке (Linux), и на ПК ученика (Git Bash на Windows).
+# FRESHEST_QUICK=1 — одна попытка git fetch без ожиданий (так зовёт хук
+# начала сессии, чтобы не задерживать старт).
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-for i in 1 2 3 4; do
-  git fetch origin --prune -q 2>/dev/null && break
-  echo "git fetch не удался (попытка $i), жду $((2 ** i)) с" >&2
-  sleep $((2 ** i))
+if [ "${FRESHEST_QUICK:-}" = 1 ]; then
+  git fetch origin --prune -q 2>/dev/null ||
+    echo "git fetch не удался — сводка по тому, что уже скачано" >&2
+else
+  for i in 1 2 3 4; do
+    git fetch origin --prune -q 2>/dev/null && break
+    echo "git fetch не удался (попытка $i), жду $((2 ** i)) с" >&2
+    sleep $((2 ** i))
+  done
+fi
+
+# Python: на Windows вместо python3 обычно python или py, а python3 бывает
+# заглушкой Microsoft Store, которая только печатает ошибку.
+PY=""
+for c in python3 python py; do
+  if "$c" -c "import sys" >/dev/null 2>&1; then PY=$c; break; fi
 done
 
 # обрезать длинные строки по символам (cut -c режет байты и ломает кириллицу)
-trunc() { python3 -c 'import sys
-for l in sys.stdin: print(l.rstrip("\n")[:150])'; }
+trunc() {
+  if [ -n "$PY" ]; then
+    PYTHONIOENCODING=utf-8 "$PY" -c 'import sys
+sys.stdin.reconfigure(encoding="utf-8")
+for l in sys.stdin: print(l.rstrip("\n")[:150])'
+  else
+    cut -c1-300
+  fi
+}
 
 branches() {
   git for-each-ref --sort=-committerdate --format='%(refname:short)' refs/remotes/origin |
