@@ -494,6 +494,11 @@ non-disclosure agreement `[нон-дисклóужер эгрúмент]`). На
 > *A vulnerability researcher should report the issue to the vendor
 > first and may publish details only after a fix is available.*
 
+**Тренажёр.** Закрепи главу в
+[тренажёре](https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf), группа
+«гл. 40 · профессия реверсера»: кто чем занят, вопросы собеседования,
+закон в работе.
+
 ---
 
 ## Что дальше
