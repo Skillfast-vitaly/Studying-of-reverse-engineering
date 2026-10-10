@@ -401,8 +401,22 @@
     </div>
   </details>
 
+  <details class="cheat">
+    <summary>Шпаргалка к приложению П6 — Python</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>struct</th><th>байт</th><th>что</th><th>struct</th><th>байт</th><th>что</th></tr>
+        <tr><td>B / b</td><td>1</td><td class="t">байт без знака / со знаком</td><td>Q / q</td><td>8</td><td class="t">QWORD</td></tr>
+        <tr><td>H / h</td><td>2</td><td class="t">WORD</td><td>8s</td><td>8</td><td class="t">байты как есть</td></tr>
+        <tr><td>I / i</td><td>4</td><td class="t">DWORD</td><td>&lt; / !</td><td>—</td><td class="t">little / big-endian</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Маски: <code>&amp; 0xFF</code>, <code>&amp; 0xFFFFFFFF</code>. <code>//</code> — целое деление вниз, <code>/</code> — дробь. <code>hex(300)</code> → <code>'0x12c'</code>, <code>int("12C", 16)</code> → 300. <code>b"Hi"[0]</code> → 72. <code>data[off:off + size]</code> — срез. <code>int.from_bytes(b, "little")</code>, <code>struct.unpack_from("&lt;I", data, off)[0]</code>. Файл: <code>with open(p, "rb") as f: data = f.read()</code>.</p>
+      <p class="sub" style="margin:10px 0">IDA: <code>idc.here()</code>, <code>idc.get_bytes(ea, n)</code>, <code>idc.set_cmt(ea, t, 1)</code>, <code>idc.print_insn_mnem(ea)</code>, <code>idautils.Functions()</code>. Ghidra (PyGhidra, <code># @runtime PyGhidra</code>): <code>currentAddress</code>, <code>getBytes(a, n)</code> — байты со знаком, нужен <code>&amp; 0xFF</code>, <code>setEOLComment(a, t)</code>. Python для IDA 9.2 — 3.13, выбрать — <code>idapyswitch</code>.</p>
+    </div>
+  </details>
+
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П5.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П6.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -2296,6 +2310,152 @@
     }
   };
 
+  /* ── приложение П6: Python для реверсера (ответы сверены с Python 3.13) ── */
+
+  function esc6(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function C(s){ return "<code>"+esc6(s)+"</code>"; }
+
+  MODES.pyout6 = {
+    label:"Что напечатает Python",
+    make:function(){
+      var q = ri(0,4);
+      if(q === 0){
+        var n = pick([ri(10,255), ri(256,4095), ri(4096,65535)]);
+        var right = "'0x"+n.toString(16)+"'";
+        var opts = [right, "'0x"+n.toString(16).toUpperCase()+"'", "'"+n.toString(16)+"'", String(n)];
+        opts = opts.filter(function(v,i,a){ return a.indexOf(v) === i; });
+        fill4(opts, function(s){ return "'0x"+(n + s).toString(16)+"'"; });
+        var all = shuffle(opts);
+        return { prompt:"Что ответит Python?", kind:"code", value:">>> hex("+n+")",
+          options:all.map(C), answer:all.indexOf(right),
+          why:"<code>hex</code> возвращает <strong>строку</strong>: <code>0x</code> впереди и маленькие буквы — <code>"+right+"</code>. Кавычки в ответе значат, что это текст, а не число (раздел П6.3)." };
+      }
+      if(q === 1){
+        var k = ri(1,127), r1 = 256 - k;
+        var all1 = shuffle([String(r1), String(-k), String(255 - k), String(k)]);
+        return { prompt:"Что ответит Python?", kind:"code", value:">>> -"+k+" & 0xFF",
+          options:all1.map(C), answer:all1.indexOf(String(r1)),
+          why:"Маска режет число до байта и показывает его, как он лежит в памяти, — дополнительный код из главы 3: 256 − "+k+" = "+r1+" = 0x"+hex(r1,2)+". Ответ "+(255 - k)+" дал бы <code>~"+k+" &amp; 0xFF</code>, «не» по битам (раздел П6.3)." };
+      }
+      if(q === 2){
+        var a = ri(7,50), b = ri(2,9);
+        if(a % b === 0) a += 1;
+        var fl = Math.floor(-a / b), tr = -Math.floor(a / b);
+        var all2 = shuffle([String(fl), String(tr), String(-a / b), String(fl - 1)]);
+        return { prompt:"Что ответит Python?", kind:"code", value:">>> -"+a+" // "+b,
+          options:all2.map(C), answer:all2.indexOf(String(fl)),
+          why:"<code>//</code> — целое деление с округлением <strong>вниз</strong>, к минус бесконечности: −"+a+" / "+b+" = "+(-a / b)+" → вниз → "+fl+". В C целое деление обрезало бы к нулю и дало "+tr+"; дробь "+(-a / b)+" дал бы <code>/</code> (раздел П6.3)." };
+      }
+      if(q === 3){
+        var w = pick(["Hello","Ghidra","PE32+","Reverse","XOR_5A"]), i = ri(0, w.length - 1), c = w.charCodeAt(i);
+        var all3 = shuffle([String(c), "'"+w[i]+"'", "b'"+w[i]+"'", "0x"+hex(c,2)]);
+        return { prompt:"Что ответит Python?", kind:"code", value:'>>> b"'+w+'"['+i+']',
+          options:all3.map(C), answer:all3.indexOf(String(c)),
+          why:"Элемент <code>bytes</code> — <strong>число</strong> 0–255, код символа по ASCII: '"+esc6(w[i])+"' = "+c+" (глава 3). Букву дал бы текст <code>\""+esc6(w)+"\"["+i+"]</code>, а <code>b'"+esc6(w[i])+"'</code> — срез <code>["+i+":"+(i + 1)+"]</code> (раздел П6.5)." };
+      }
+      var a4 = 0xFFFFFF00 + ri(0,0xFF), b4 = ri(0x101,0x1FF), sum = a4 + b4, m = sum - 0x100000000;
+      var all4 = shuffle([String(m), String(sum), "OverflowError", String(m + 1)]);
+      return { prompt:"Что ответит Python?", kind:"code", value:">>> (0x"+hex(a4)+" + 0x"+hex(b4)+") & 0xFFFFFFFF",
+        options:all4.map(C), answer:all4.indexOf(String(m)),
+        why:"Python складывает без переполнения: 0x"+hex(a4)+" + 0x"+hex(b4)+" = 0x"+hex(sum)+" = "+sum+". Маска <code>&amp; 0xFFFFFFFF</code> отрезает бит 32, как это сделал бы 32-битный регистр: "+sum+" − 2³² = "+m+". Ошибки переполнения в Python не бывает (раздел П6.3)." };
+    }
+  };
+
+  MODES.bytes6 = {
+    label:"Числа из байтов",
+    make:function(){
+      var nb = pick([2,4,4]), b = [];
+      for(var i = 0; i < nb; i++) b.push(ri(0,255));
+      if(Math.random() < 0.4) b[nb - 1] = ri(0x80,0xFF);
+      var le = 0, be = 0, full = Math.pow(2, 8*nb);
+      for(var j = 0; j < nb; j++){ le += b[j] * Math.pow(256, j); be = be * 256 + b[j]; }
+      var sle = le >= full / 2 ? le - full : le;
+      var hx = b.map(function(x){ return hex(x,2); }).join(" ");
+      var rev = b.slice().reverse().map(function(x){ return hex(x,2); }).join("");
+      var mode = ri(0,2), expr, right, why;
+      if(mode === 0){ expr = 'int.from_bytes(bytes.fromhex("'+hx+'"), "little")'; right = le;
+        why = "little-endian — младший байт первым (глава 3). Переворачиваем: 0x"+rev+" = "+le+"."; }
+      else if(mode === 1){ expr = 'int.from_bytes(bytes.fromhex("'+hx+'"), "big")'; right = be;
+        why = "big-endian — байты как написаны: 0x"+b.map(function(x){ return hex(x,2); }).join("")+" = "+be+". Процессор x86 так числа не хранит, но некоторые форматы — да (метка PyInstaller, П6.11)."; }
+      else { expr = 'int.from_bytes(bytes.fromhex("'+hx+'"), "little", signed=True)'; right = sle;
+        why = "Переворачиваем: 0x"+rev+" = "+le+". "+(le >= full / 2 ? "Старший бит — 1, число отрицательное: "+le+" − 2^"+(8*nb)+" = "+sle+"." : "Старший бит — 0, со знаком и без знака одинаково: "+le+".")+" (глава 3)"; }
+      var opts = [right, le, be, sle].map(String).filter(function(v,k,a){ return a.indexOf(v) === k; });
+      fill4(opts, function(s){ return String(right + 256*s); });
+      var all = shuffle(opts);
+      return { prompt:"Что ответит Python?", kind:"code", value:">>> "+expr,
+        options:all.map(C), answer:all.indexOf(String(right)), why:why+" Раздел П6.6." };
+    }
+  };
+
+  var STRUCT6 = [
+    ["DWORD без знака, little-endian", [C('"<I"'),C('"<i"'),C('">I"'),C('"<H"')], 0, "<code>I</code> — 4 байта без знака, маленькая <code>i</code> — со знаком, <code>&gt;</code> — big-endian, <code>H</code> — 2 байта (раздел П6.6)."],
+    ["WORD со знаком, little-endian", [C('"<h"'),C('"<H"'),C('"<w"'),C('"<i"')], 0, "<code>H</code>/<code>h</code> — 2 байта; маленькая буква — со знаком. Буквы <code>w</code> в struct нет."],
+    ["QWORD без знака, little-endian", [C('"<Q"'),C('"<q"'),C('"<I"'),C('"<8s"')], 0, "<code>Q</code> — 8 байт без знака. <code>8s</code> тоже 8 байт, но это байты как есть, а не число."],
+    ["struct.calcsize(\"<HI\")", [C("6"),C("8"),C("2"),C("4")], 0, "С <code>&lt;</code> поля вплотную: 2 + 4 = 6 (раздел П6.6)."],
+    ["struct.calcsize(\"HI\")", [C("8"),C("6"),C("4"),C("12")], 0, "Без <code>&lt;</code> Python выравнивает, как компилятор C (П1.4): после WORD два пустых байта, всего 8. Для форматов файлов всегда пиши <code>&lt;</code>."],
+    ["struct.calcsize(\"<4sHH\")", [C("8"),C("6"),C("12"),C("4")], 0, "4 + 2 + 2 = 8: подпись PE, машина, число секций (раздел П6.6)."],
+    ["struct.calcsize(\"<IIIII\")", [C("20"),C("5"),C("10"),C("40")], 0, "5 × 4 = 20 — столько занимает запись каталога импортов (упражнение П6.3)."],
+    ["struct.unpack(\"<b\", b\"\\xff\")[0]", [C("-1"),C("255"),C("0xff"),C("b'\\xff'")], 0, "Маленькая <code>b</code> — байт со знаком: <code>FF</code> = −1 (глава 3)."],
+    ["struct.unpack(\"<B\", b\"\\xff\")[0]", [C("255"),C("-1"),C("0xff"),C("1")], 0, "Большая <code>B</code> — без знака: 255. Ответ печатается десятичным числом."],
+    ["struct.unpack(\"<I\", b\"\\x34\\x12\\x00\\x00\")", [C("(4660,)"),C("4660"),C("[4660]"),C("'4660'")], 0, "unpack всегда возвращает кортеж, даже из одного числа. Поэтому пишут <code>[0]</code> (раздел П6.6)."],
+    ["struct.unpack(\"<I\", b\"\\x34\\x12\")", ["ошибка: нужно ровно 4 байта",C("4660"),C("(4660,)"),C("0x1234")], 0, "<code>struct.error: unpack requires a buffer of 4 bytes</code>. Для поля в середине данных бери <code>unpack_from(формат, данные, смещение)</code>."],
+    ["Что значит ! в начале формата \"!8sIIII64s\"?", ["big-endian — старший байт первым","little-endian","без выравнивания, порядок как у процессора","ошибка в формате"], 0, "<code>!</code> и <code>&gt;</code> — big-endian. Так записана метка PyInstaller (раздел П6.11)."]
+  ];
+  MODES.struct6 = { label:"Формат struct", make:function(){ return qa(STRUCT6, "Модуль struct", "code"); } };
+
+  var C2PY6 = [
+    ["i++;", [C("i += 1"),C("i++"),C("++i"),C("i =+ 1")], 0, "В Python нет <code>++</code>. <code>++i</code> — это «плюс плюс i», ничего не меняет, а <code>i =+ 1</code> — «i = +1». Ловушки для тех, кто пришёл из C (раздел П6.4)."],
+    ["if (a == 1 && b != 2)", [C("if a == 1 and b != 2:"),C("if a == 1 && b != 2:"),C("if (a == 1 && b != 2) {"),C("if a == 1 & b != 2:")], 0, "Логика словами: <code>and</code>, <code>or</code>, <code>not</code>. Скобки не нужны, в конце двоеточие (раздел П6.4)."],
+    ["for (i = 0; i < n; i++)", [C("for i in range(n):"),C("for i in n:"),C("for (i = 0; i < n; i++):"),C("while i < n: i++")], 0, "<code>range(n)</code> — числа от 0 до n−1 (раздел П6.4)."],
+    ["printf(\"%08X\\n\", x);", [C('print(f"{x:08X}")'),C('print("%08X", x)'),C('printf(f"{x:08X}")'),C("print(x:08X)")], 0, "f-строка: формат после двоеточия, как у printf. <code>print(\"%08X\", x)</code> напечатает сам текст <code>%08X</code> и число через пробел (раздел П6.3)."],
+    ["10 / 3, где оба int и нужен ответ 3", [C("10 // 3"),C("10 / 3"),C("10 % 3"),C("10 ** 3")], 0, "В Python <code>/</code> даёт дробь 3.333…, целое деление — <code>//</code>. <code>%</code> — остаток, <code>**</code> — степень (раздел П6.3)."],
+    ["NULL", [C("None"),C("null"),C("NULL"),C("0")], 0, "«Ничего» в Python — <code>None</code>, с большой буквы, как <code>True</code> и <code>False</code>."],
+    ["strtol(s, NULL, 16)", [C("int(s, 16)"),C("hex(s)"),C("int(s)"),C("s.hex()")], 0, "<code>int(текст, 16)</code> читает hex. <code>hex(число)</code> — наоборот, число в текст (раздел П6.3)."],
+    ["fopen(path, \"rb\"); fread(…); fclose(f);", [C('with open(path, "rb") as f: data = f.read()'),C("data = open(path)"),C('fopen(path, "rb")'),C("data = read(path)")], 0, "<code>with</code> сам закроет файл, <code>read()</code> прочитает всё в <code>bytes</code> (раздел П6.7)."],
+    ["buf + 4 — хвост массива с четвёртого байта", [C("buf[4:]"),C("buf + 4"),C("buf[4]"),C("buf[:4]")], 0, "Срез: <code>[4:]</code> — с номера 4 до конца. <code>buf[4]</code> — один байт-число, <code>[:4]</code> — первые четыре (раздел П6.5)."],
+    ["/* комментарий */", [C("# комментарий"),C("// комментарий"),C("/* комментарий */"),C("-- комментарий")], 0, "В Python комментарий — от <code>#</code> до конца строки."],
+    ["#include <string.h>", [C("import struct"),C("#include struct"),C("include(struct)"),C("using struct")], 0, "Модуль подключают словом <code>import</code>: готовый (<code>struct</code>) или свой (<code>import pe_info</code>, раздел П6.9)."],
+    ["argv[1]", [C("sys.argv[1]"),C("argv[1]"),C("sys.args(1)"),C("input(1)")], 0, "Аргументы командной строки — список <code>sys.argv</code>, нужен <code>import sys</code> (раздел П6.7)."]
+  ];
+  MODES.c2py6 = { label:"С C на Python", make:function(){ return qa(C2PY6, "Как это записать на Python?", "code"); } };
+
+  var API6 = [
+    ["адрес под курсором — в IDA", [C("idc.here()"),C("currentAddress"),C("idc.cursor()"),C("here.ea")], 0, "В IDA — <code>idc.here()</code> (П5.12), в Ghidra — <code>currentAddress</code> (раздел П6.13)."],
+    ["адрес под курсором — в Ghidra", [C("currentAddress"),C("idc.here()"),C("getCursor()"),C("currentProgram")], 0, "<code>currentAddress</code> — поле скрипта Ghidra. <code>currentProgram</code> — вся программа (раздел П6.13)."],
+    ["прочитать 17 байт — в IDA", [C("idc.get_bytes(ea, 17)"),C("getBytes(ea, 17)"),C("idc.read(ea, 17)"),C("ea[0:17]")], 0, "Вернёт <code>bytes</code> или <code>None</code>, если адреса нет (раздел П6.12)."],
+    ["прочитать 17 байт — в Ghidra", [C("getBytes(currentAddress, 17)"),C("idc.get_bytes(currentAddress, 17)"),C("readBytes(17)"),C("currentAddress[0:17]")], 0, "Вернёт массив Java <code>byte[]</code> — байты со знаком (раздел П6.13)."],
+    ["повторяемый комментарий — в IDA", [C("idc.set_cmt(ea, text, 1)"),C("idc.set_cmt(ea, text, 0)"),C("setEOLComment(ea, text)"),C("idc.comment(ea, text)")], 0, "Последний аргумент: 0 — обычный, 1 — повторяемый, виден и там, где на адрес ссылаются (П5.7, раздел П6.12)."],
+    ["комментарий в конце строки — в Ghidra", [C("setEOLComment(addr, text)"),C("idc.set_cmt(addr, text, 0)"),C("setComment(addr)"),C("addr.comment = text")], 0, "EOL — end of line, «конец строки» (раздел П6.13)."],
+    ["мнемоника инструкции — в IDA", [C("idc.print_insn_mnem(ea)"),C("idc.print_operand(ea, 0)"),C("idc.get_func_name(ea)"),C("idc.mnem(ea)")], 0, "<code>print_insn_mnem</code> — <code>\"xor\"</code>, <code>\"mov\"</code>; <code>print_operand(ea, n)</code> — операнд номер n (раздел П6.12)."],
+    ["все функции базы — в IDA", [C("idautils.Functions()"),C("idautils.FuncItems(ea)"),C("idautils.Strings()"),C("idc.get_func_name(ea)")], 0, "<code>Functions()</code> — адреса начал функций; <code>FuncItems(f)</code> — инструкции одной функции (П5.12)."],
+    ["все инструкции одной функции — в IDA", [C("idautils.FuncItems(func)"),C("idautils.Functions()"),C("idautils.CodeRefsTo(func, False)"),C("idc.next_head(func)")], 0, "<code>next_head</code> дал бы только следующую инструкцию, <code>CodeRefsTo</code> — кто ссылается (П5.12)."],
+    ["зачем в скрипте Ghidra b & 0xFF", ["байты Java со знаком: от −128 до 127","чтобы скрипт работал быстрее","Ghidra отдаёт байты по 16 бит","так требует PyGhidra"], 0, "Байт <code>0xC8</code> приходит как −56. Маска возвращает 0–255, без неё <code>chr</code> упадёт (раздел П6.13)."],
+    ["как запустить Ghidra с Python 3", [C("support\\pyghidraRun.bat"),C("ghidraRun.bat"),C("python ghidra.py"),C("pip install ghidra")], 0, "<code>pyghidraRun.bat</code> в папке <code>support</code>; при первом запуске он предложит поставить модуль pyghidra (раздел П6.13)."],
+    ["какую строку написать в скрипте Ghidra, чтобы его выполнил Python 3", [C("# @runtime PyGhidra"),C("# @python 3"),C("#!python3"),C("# @category PyGhidra")], 0, "<code>@runtime</code> выбирает движок, <code>@category</code> — папку в Script Manager (раздел П6.13)."],
+    ["какой Python ставить для IDA 9.2 и Ghidra 12.1", ["3.13","3.15 — самый новый","2.7","любой третий"], 0, "IDA 9.2 понимает 3.11–3.13, Ghidra 12.1.4 — 3.9–3.14. Обоим подходит 3.13 (раздел П6.2)."],
+    ["чем указать IDA, какой Python брать", [C("idapyswitch"),C("py install"),C("pip install ida"),C("Alt+F7")], 0, "<code>idapyswitch</code> в папке IDA находит все Python и даёт выбрать (раздел П6.2)."],
+    ["что открывает Shift+F2 в IDA", ["окно для нескольких строк Python","запуск скрипта из файла","недавние скрипты","переименование"], 0, "Shift+F2 — выполнить несколько строк; Alt+F7 — скрипт из файла; Alt+F9 — недавние скрипты (раздел П6.12)."]
+  ];
+  MODES.api6 = { label:"IDA и Ghidra из Python", make:function(){ return qa(API6, "Скрипты для дизассемблеров", "text"); } };
+
+  var TERMS6 = [
+    ["REPL","окно «прочитай — вычисли — напечатай»","рэпл"], ["string","строка, текст","стринг"], ["bytes","байты (числа 0–255)","байтс"],
+    ["slice","срез","слайс"], ["list","список","лист"], ["dictionary","словарь","дúкшенери"], ["tuple","кортеж","тьюпл"],
+    ["module","модуль","мóдуль"], ["indentation","отступ","индентéйшен"], ["false positive","ложное срабатывание","фолс пóзитив"],
+    ["overlay","хвост файла за последней секцией","óуверлэй"], ["docstring","строка документации","дóкстринг"]
+  ];
+  MODES.terms6 = {
+    label:"Слова Python",
+    make:function(){
+      var it = pick(TERMS6);
+      var others = shuffle(TERMS6.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «Python (приложение П6)»." };
+    }
+  };
+
   /* ── глава 40: профессия реверсера ── */
 
   var PROF40 = [
@@ -2605,6 +2765,7 @@
     { id:"gp3",  ch:"П3",    title:"приложение: гонки и блокировки", modes:["racep3","atomp3","rulesp3","cachep3","termsp3"], mix:"mixp3" },
     { id:"gp4",  ch:"П4",    title:"приложение: читаем документацию Intel", modes:["wordsp4","phrasep4","pseudop4","bookp4"], mix:"mixp4" },
     { id:"gp5",  ch:"П5",    title:"приложение: IDA Pro 9.2", modes:["keysp5","hexp5","synp5","namesp5","xrefp5"], mix:"mixp5" },
+    { id:"gp6",  ch:"П6",    title:"приложение: Python для реверсера", modes:["pyout6","bytes6","struct6","c2py6","api6","terms6"], mix:"mixp6" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
