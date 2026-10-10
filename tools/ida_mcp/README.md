@@ -66,11 +66,12 @@ MCP (Model Context Protocol `[модэл кóнтэкст прóутэкол]`, 
 
 Мост — это файл `tools\ida_mcp\bridge.py`. Claude Code сам запускает
 его и через него говорит с IDA. Подключается одной командой
-в терминале, из папки курса. Если курс лежит в `C:\reverse\kurs`, то так:
+в терминале, из папки курса. Если курс лежит в `C:\reverse\course`
+(так в главе 6), то так:
 
 ```
-cd C:\reverse\kurs
-claude mcp add --transport stdio nastavnik-ida -- python C:\reverse\kurs\tools\ida_mcp\bridge.py
+cd C:\reverse\course
+claude mcp add --transport stdio nastavnik-ida -- python C:\reverse\course\tools\ida_mcp\bridge.py
 ```
 
 Если курс лежит в другом месте, поменяй путь в обоих местах.
