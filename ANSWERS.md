@@ -4839,6 +4839,315 @@ IDA 9.2 показывает такие числа иначе, и я попра�
 
 ---
 
+## Приложение П6. Python для реверсера
+
+### П6.1. Калькулятор
+
+**а)** `1234`.
+
+```
+>>> int.from_bytes(bytes.fromhex("D2 04 00 00"), "little")
+1234
+```
+
+Ход мысли, как в главе 3: little-endian — переворачиваем, получаем
+`00 00 04 D2`, то есть `0x4D2` = 4 × 256 + 0xD2 = 1024 + 210 = 1234.
+Если ответ вышел `3523477504`, ты прочитал как `"big"`: это
+`0xD2040000`.
+
+**б)** `0xfffffb2e`.
+
+```
+>>> hex(-1234 & 0xFFFFFFFF)
+'0xfffffb2e'
+```
+
+Без маски Python напишет `'-0x4d2'`: у его чисел нет размера (П6.3).
+Маска на 32 бита показывает то, что лежит в регистре: дополнительный
+код из главы 3, 2³² − 1234 = 4294966062 = `0xFFFFFB2E`.
+
+**в)** `-2147483648`.
+
+```
+>>> signed32((0x7FFFFFFF + 1) & 0xFFFFFFFF)
+-2147483648
+```
+
+`0x7FFFFFFF` — самое большое положительное 32-битное число со знаком.
+Плюс один — и в регистре `0x80000000`: старший бит стал единицей,
+число стало самым маленьким отрицательным. Это переполнение со знаком,
+процессор отмечает его флагом `OF` (глава 9). Без маски и `signed32`
+Python ответил бы `2147483648` — числом, которого в 32-битном регистре
+со знаком не бывает. Отсюда правило: считаешь как процессор — режь
+маской и решай, со знаком число или без.
+
+### П6.2. Длинные имена секций
+
+В `load` перед циклом по секциям найди таблицу имён, а в цикле
+подменяй имя, если оно начинается с `/`:
+
+```python
+    symtab = u32(data, fh + 8)            # PointerToSymbolTable
+    nsyms = u32(data, fh + 12)            # NumberOfSymbols
+    strtab = symtab + nsyms * 18          # таблица имён — сразу за символами
+    table = opt + u16(data, fh + 16)      # таблица секций
+    info["sections"] = []
+    for i in range(info["nsections"]):
+        e = table + 40 * i                # запись секции — 40 байт
+        name = data[e:e + 8].rstrip(b"\0").decode("ascii", "replace")
+        if name.startswith("/") and symtab != 0:
+            start = strtab + int(name[1:])        # «/4» -> смещение 4
+            end = data.index(b"\0", start)
+            name = data[start:end].decode("ascii", "replace")
+```
+
+- `name.startswith("/")` — «начинается ли строка с `/`»;
+- `int(name[1:])` — всё после косой черты, прочитанное как десятичное
+  число: `"/4"` → `4`;
+- `data.index(b"\0", start)` — где после `start` первый нулевой байт:
+  там кончается имя, как строка в C;
+- `symtab != 0` — защита: у файлов без таблицы символов (например,
+  собранных Visual Studio) поле равно нулю, и искать там нечего.
+
+У меня таблица символов начинается на `0x33400`, символов `1915`,
+таблица имён — `0x33400 + 1915 × 18 = 0x3BAA6`. Хвост вывода:
+
+```
+.reloc    84         10000     200       9C00      R--
+.debug_aranges 620        11000     800       9E00      R--
+.debug_info 13184      12000     13200     A600      R--
+.debug_abbrev 321C       26000     3400      1D800     R--
+.debug_line 6D64       2A000     6E00      20C00     R--
+.debug_frame 1728       31000     1800      27A00     R--
+.debug_str 39D        33000     400       29200     R--
+.debug_line_str 1F7A       34000     2000      29600     R--
+.debug_loclists 7782       36000     7800      2B600     R--
+.debug_rnglists 53F        3E000     600       32E00     R--
+```
+
+Все девять — отладочная информация `.debug_…` (DWARF, П1.9). Колонки
+съехали: имена длиннее девяти букв. Поправь ширину — `{name:16}`
+вместо `{name:9}`. Числа у тебя могут отличаться: их задаёт версия
+компилятора.
+
+### П6.3. Импорты
+
+```python
+# imports.py — таблица импортов (только для 64-битных файлов)
+import struct
+import sys
+import pe_info
+
+
+def cstr(data, off):
+    """Строка C: байты до нулевого."""
+    end = data.index(b"\0", off)
+    return data[off:end].decode("ascii", "replace")
+
+
+def imports(info):
+    data = info["data"]
+    opt = pe_info.u32(data, 0x3C) + 4 + 20        # опциональный заголовок
+    rva = pe_info.u32(data, opt + 112 + 8)        # каталог № 1 — импорты
+    off = pe_info.rva_to_off(info, rva)
+    result = []
+    while True:
+        ilt, _, _, name_rva, iat = struct.unpack_from("<IIIII", data, off)
+        if name_rva == 0:                         # запись из нулей — конец
+            break
+        dll = cstr(data, pe_info.rva_to_off(info, name_rva))
+        funcs = []
+        t = pe_info.rva_to_off(info, ilt or iat)
+        while True:
+            entry = pe_info.u64(data, t)
+            if entry == 0:
+                break
+            if entry >> 63:                       # импорт по номеру
+                funcs.append(f"#{entry & 0xFFFF}")
+            else:                                 # 2 байта подсказки, потом имя
+                funcs.append(cstr(data, pe_info.rva_to_off(info, entry) + 2))
+            t += 8
+        result.append((dll, funcs))
+        off += 20                                 # запись каталога — 20 байт
+    return result
+
+
+if __name__ == "__main__":
+    for dll, funcs in imports(pe_info.load(sys.argv[1])):
+        print(f"{dll}: {len(funcs)}")
+        print("   ", ", ".join(funcs))
+```
+
+Как устроено (по документации Microsoft «PE Format»):
+
+- каталоги данных начинаются со смещения 112 опционального заголовка
+  (у 64-битных файлов), каждый — 8 байт: RVA и размер. Импорты —
+  запись №1, отсюда `112 + 8`;
+- каталог импортов — массив записей по 20 байт, по одной на DLL.
+  Из пяти полей нам нужны три: где список функций (`ilt`), где имя
+  DLL (`name_rva`) и запасной список (`iat`). `_` — так в Python
+  называют переменную, которая не нужна;
+- список функций — числа по 8 байт до нулевого. Если старший бит
+  равен 1, функцию берут по номеру (ordinal). Иначе это RVA записи:
+  2 байта подсказки, потом имя;
+- `ilt or iat` — «первое, если не ноль, иначе второе». Бывают файлы,
+  где первого списка нет.
+
+Вывод на `01_strings.exe`:
+
+```
+KERNEL32.dll: 13
+    DeleteCriticalSection, EnterCriticalSection, GetLastError, InitializeCriticalSection, IsDBCSLeadByteEx, LeaveCriticalSection, MultiByteToWideChar, SetUnhandledExceptionFilter, Sleep, TlsGetValue, VirtualProtect, VirtualQuery, WideCharToMultiByte
+msvcrt.dll: 39
+    __C_specific_handler, ___lc_codepage_func, ___mb_cur_max_func, __getmainargs, __initenv, __iob_func, __set_app_type, __setusermatherr, _amsg_exit, _cexit, _commode, _errno, _fmode, _initterm, _lock, _onexit, _unlock, abort, calloc, exit, fflush, fgets, fprintf, fputc, free, fwrite, localeconv, malloc, memcpy, memset, puts, signal, strcmp, strcspn, strerror, strlen, strncmp, vfprintf, wcslen
+```
+
+13 и 39 — те же числа, что в ответе П5.1. Своих функций задачи
+среди них пять: `fgets`, `strcspn`, `strcmp`, `puts`, `fflush`,
+остальное зовёт стартовый код. У тебя числа могут чуть отличаться:
+w64devkit не обязан собирать байт в байт, как мой компилятор.
+
+В работе для этого берут готовую библиотеку **pefile**
+(`py -V:3.13 -m pip install pefile`): её `pe.DIRECTORY_ENTRY_IMPORT`
+даёт тот же список. Я проверил на pefile версии 2024.8.26 — 13 и 39.
+Но написать разбор самому один раз стоит: теперь ты знаешь, что
+библиотека делает внутри, и поймёшь, когда она ошибётся на
+испорченном файле.
+
+### П6.4. Перебор ключа
+
+```python
+# xor_brute.py — перебрать все 256 ключей однобайтового XOR
+ENC = bytes.fromhex("22 35 28 05 32 33 3e 3f 29 05 34 35 2e 32 33 34 3d")
+
+for key in range(256):
+    dec = bytes(b ^ key for b in ENC)
+    if all(0x20 <= b < 0x7F for b in dec):          # всё печатное?
+        print(f"{key:02X}  {dec.decode()}")
+```
+
+`all(…)` — «верно ли условие для всех элементов». Прошло **52 ключа**:
+от `43 avkFqp}|jFwvmqpw~` до `7F ]JWzMLA@VzKJQMLKB`, и среди них
+`5A xor_hides_nothing`.
+
+Почему так много? Все 17 байтов шифра лежат в узком промежутке от
+`0x05` до `0x3F`. XOR с ключом переставляет весь этот промежуток
+разом, и для многих ключей — у нас 52 из 256, каждый пятый — он
+целиком попадает в печатную область `0x20`–`0x7E`. Признак «всё
+печатное» слишком слабый.
+
+Строже: пароль — это обычно буквы, цифры и подчёркивание. Оставим
+только маленькие латинские буквы, цифры и `_`:
+
+```python
+    if all(0x61 <= b <= 0x7A or 0x30 <= b <= 0x39 or b == 0x5F for b in dec):
+```
+
+Остаётся один ключ — `5A`. Так и работают переборщики: пробуют всё,
+а отсеивают по приметам настоящего текста. Если же известно хоть
+несколько букв открытого текста, перебор не нужен вовсе: ключ = байт
+шифра XOR известная буква (атака по известному тексту, раздел 17.7).
+
+### П6.5. Дизассемблер байт-кода на Python
+
+```python
+# vmdis.py — дизассемблер байт-кода машины из главы 20
+import sys
+
+# код операции -> как печатать; {} — место для байта-операнда
+OPS = {1: "PUSH  0x{:02x}", 2: "LOAD  in[{}]", 3: "XOR", 4: "ADD",
+       5: "ROTL  {}", 6: "EQ", 7: "HALT"}
+
+path, offset, size = sys.argv[1], int(sys.argv[2], 16), int(sys.argv[3])
+with open(path, "rb") as f:
+    f.seek(offset)
+    code = f.read(size)
+
+pc = 0
+while pc < len(code):
+    fmt = OPS.get(code[pc])
+    if fmt is None:                       # неизвестный код
+        print(f"{pc:3}:  ???   0x{code[pc]:02x}")
+        pc += 1
+    elif "{" in fmt:                      # команда с операндом: 2 байта
+        print(f"{pc:3}:  " + fmt.format(code[pc + 1]))
+        pc += 2
+    else:                                 # команда без операнда: 1 байт
+        print(f"{pc:3}:  " + fmt)
+        pc += 1
+```
+
+Запуск — с теми же числами, что в главе 20:
+
+```
+python vmdis.py 05_vm.exe 7800 183
+```
+
+Вывод совпал с выводом `vmdis.c` строка в строку: 113 строк, от
+`0:  LOAD  in[0]` до `182:  HALT`, ни одного `???`. Если у тебя
+смещение байт-кода другое, бери то, которое ты нашёл в разделе 20.6.
+
+Что здесь делает Python вместо тебя:
+
+- **словарь** вместо `switch`: код операции — ключ, текст для
+  печати — значение. Новую команду добавляешь одной строкой;
+- `OPS.get(код)` — вернуть значение или `None`, если такого кода нет.
+  Это и есть ветка `default` из C;
+- `"{" in fmt` — есть ли в образце место для операнда. Длину команды
+  дизассемблер узнаёт по самому образцу;
+- `fmt.format(число)` — подставить число в `{}`: `"PUSH  0x{:02x}"`
+  с `0x01` даёт `PUSH  0x01`, как `%02x` в C.
+
+Двадцать с небольшим строк против пятидесяти на C — и думать
+приходится о командах машины, а не о `fread` и размере массива.
+
+### П6.6. Свой `.exe` из Python
+
+Команды в PowerShell, в папке с `hello.py`:
+
+```
+py -V:3.13 -m pip install pyinstaller
+py -V:3.13 -m PyInstaller --onefile hello.py
+python pyi_check.py dist\hello.exe
+python strings.py dist\hello.exe PyInstaller
+```
+
+`--onefile` — «собрать в один файл». Готовый `hello.exe` появится
+в папке `dist`. Ожидаю такой ответ `pyi_check.py`:
+
+```
+PyInstaller: metka na smeshchenii …
+Python 3.13, biblioteka python313.dll
+```
+
+Смещение будет почти в самом конце файла. Это ожидание, а не
+проверка: в облаке настоящий `.exe` PyInstaller не собрать, поэтому
+я и прошу прислать твой вывод.
+
+`strings.py` найдёт строки со словом `PyInstaller` — это сообщения
+загрузчика. Например, в исходнике загрузчика PyInstaller 6 есть
+`Could not load PyInstaller's embedded PKG archive from the executable`
+(«не удалось загрузить встроенный архив PyInstaller из файла»). Часть
+находок окажется без адреса: архив приписан **за последней секцией**.
+Такой хвост Windows при запуске в память не грузит, его называют
+**overlay** `[óуверлэй]` — «наложение». Загрузчик PyInstaller сам
+читает свой хвост с диска.
+
+### П6.7. Знаковые байты Java
+
+`idc.get_bytes` в IDA возвращает обычные `bytes` Python: каждый
+элемент — число от 0 до 255, маска не нужна. `getBytes` в Ghidra
+возвращает массив Java `byte[]`, а `byte` в Java знаковый: от −128
+до 127. Байт `0xC8` придёт как `-56` — тот же байт, прочитанный со
+знаком (глава 3).
+
+Без маски: `-56 ^ 0x5A` = `-110`, и `chr(-110)` остановит скрипт
+ошибкой `ValueError: chr() arg not in range(0x110000)`. С маской:
+`(-56 & 0xFF)` = `200` = `0xC8`, `0xC8 ^ 0x5A` = `0x92` = `146`.
+`chr(146)` — непечатный символ, но скрипт доработает до конца
+и подпишет строку. А то, что расшифровка вышла непечатной, — уже
+повод проверить ключ.
+
 ## Глава 40. Профессия реверсера
 
 ### 40.1. Две профессии
