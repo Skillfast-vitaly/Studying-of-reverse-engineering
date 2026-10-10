@@ -17,3 +17,6 @@ peda-session-*.txt
 __pycache__/
 *.pyc
 .venv/
+
+# Проверочные сборки скилла verify-example
+build-check/
