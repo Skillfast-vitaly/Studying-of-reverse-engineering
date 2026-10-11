@@ -47,8 +47,12 @@ for f in md_files:
         resolved = (f.parent / target).resolve()
         if not resolved.exists():
             name = pathlib.Path(target).name
-            # ссылка на будущую главу — это план, не ошибка
-            if re.match(r"^\d\d-", name) and name not in existing:
+            # ссылка на будущую главу — это план, не ошибка. Но если глава
+            # с этим номером уже написана под другим именем, ссылка битая:
+            # так в главе 15 до 11.10.2026 стояло 16-zadacha-1.md вместо
+            # 16-razbor-zadachi-1.md, и проверка молчала.
+            if re.match(r"^\d\d-", name) and not any(
+                    e.startswith(name[:3]) for e in existing):
                 continue
             add("ССЫЛКА", f"{rel}:{line}", f"нет файла {target}")
 
