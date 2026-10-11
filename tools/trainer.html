@@ -415,8 +415,24 @@
     </div>
   </details>
 
+  <details class="cheat">
+    <summary>Шпаргалка к приложению П7 — C++</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>в листинге</th><th>что это</th></tr>
+        <tr><td>[rcx+10h] в методе</td><td class="t">поле объекта: RCX — this</td></tr>
+        <tr><td>mov ecx, 18h / call operator new</td><td class="t">new: объект 24 байта</td></tr>
+        <tr><td>lea rax, …vftable / mov [rsi], rax</td><td class="t">конструктор пишет адрес таблицы</td></tr>
+        <tr><td>mov rax, [rcx] / call [rax+N]</td><td class="t">виртуальный вызов, ячейка N / 8</td></tr>
+        <tr><td>mov edx, 1 / call [rax]</td><td class="t">delete через удаляющий деструктор (VS)</td></tr>
+        <tr><td>call _CxxThrowException</td><td class="t">throw (у g++ — __cxa_throw)</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Таблица VS: 0 — удаляющий деструктор, дальше методы по порядку. g++: 0 и 1 — два деструктора. Раскладка: VS кладёт поля наследника после полного базового класса (Dog — 24 байта), g++ — в его пустые байты (16). Имена: <code>??0</code> конструктор, <code>??1</code> деструктор, <code>??_7</code> таблица, <code>?m@K@@U…</code> — K::m виртуальный, <code>_ZN…</code> — g++. RTTI: <code>.?AV</code> класс, <code>.?AU</code> структура. <code>std::string</code> VS: 32 байта, вместимость на +18h больше 15 — в начале адрес; размер на +10h. <code>std::vector</code>: три указателя.</p>
+    </div>
+  </details>
+
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П6.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П7.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -2456,6 +2472,148 @@
     }
   };
 
+  /* ── приложение П7: C++ (раскладка и имена сверены компилятором: clang в режиме MSVC и MinGW g++) ── */
+
+  var CTYPES7 = [["char",1],["short",2],["int",4],["long long",8]];
+  function al7(x, a){ return Math.ceil(x / a) * a; }
+  MODES.layout7 = {
+    label:"Раскладка объекта",
+    make:function(){
+      var bt = pick(CTYPES7), dt = pick(CTYPES7), vs = Math.random() < 0.5;
+      var base = al7(8 + bt[1], 8);
+      var off = vs ? al7(base, dt[1]) : al7(8 + bt[1], dt[1]);
+      var size = al7(off + dt[1], 8);
+      var who = vs ? "Visual Studio" : "g++";
+      var code = "class Base { public: virtual void f(); "+bt[0]+" b; };\nclass Item : public Base { public: "+dt[0]+" d; };";
+      var why = "Base: адрес таблицы 8 байт, b на +8, всего "+base+" байт (кратно 8, П1.4). ";
+      why += vs ? "Visual Studio кладёт поля наследника после полных "+base+" байт базового класса: d на +"+hex(off)+"h."
+                : "g++ занимает пустые байты базового класса: первое свободное место после b, кратное "+dt[1]+", — +"+hex(off)+"h.";
+      why += " sizeof(Item) = "+off+" + "+dt[1]+" → кратно 8 → "+size+" (раздел П7.5).";
+      if(Math.random() < 0.5){
+        var opts = [off, 16, al7(8 + bt[1], dt[1]), 8 + bt[1]].map(function(x){ return "+"+hex(x)+"h"; })
+          .filter(function(v,i,a){ return a.indexOf(v) === i; });
+        fill4(opts, function(s){ return "+"+hex(off + 4*s)+"h"; });
+        var all = shuffle(opts), right = "+"+hex(off)+"h";
+        return { prompt:"Сборка "+who+". На каком смещении поле d?", kind:"asm", value:code,
+          options:all.map(C), answer:all.indexOf(right), why:why };
+      }
+      var opts2 = [size, 16, 24, off + dt[1]].map(String).filter(function(v,i,a){ return a.indexOf(v) === i; });
+      fill4(opts2, function(s){ return String(size + 8*s); });
+      var all2 = shuffle(opts2);
+      return { prompt:"Сборка "+who+". Чему равен sizeof(Item) — число у mov ecx перед operator new?", kind:"asm", value:code,
+        options:all2.map(C), answer:all2.indexOf(String(size)), why:why };
+    }
+  };
+
+  var CLASSES7 = [
+    { base:"Animal", methods:["name","speak"],
+      kids:[{ cls:"Dog", over:["name","speak"] }, { cls:"Bird", over:["name"] }, { cls:"Animal", over:["name","speak"] }] },
+    { base:"Shape", methods:["area","draw","title"],
+      kids:[{ cls:"Circle", over:["area","title"] }, { cls:"Square", over:["area","draw"] }, { cls:"Shape", over:["area","draw","title"] }] }
+  ];
+  MODES.slot7 = {
+    label:"Ячейка таблицы",
+    make:function(){
+      var c = pick(CLASSES7), kid = pick(c.kids), vs = Math.random() < 0.5;
+      var skip = vs ? 1 : 2;                       /* VS: удаляющий деструктор; g++: два деструктора */
+      var m = ri(0, c.methods.length - 1), off = (skip + m) * 8;
+      var owner = kid.over.indexOf(c.methods[m]) >= 0 ? kid.cls : c.base;
+      var right = owner+"::"+c.methods[m];
+      var opts = [right];
+      c.methods.forEach(function(x){ var o = (kid.over.indexOf(x) >= 0 ? kid.cls : c.base)+"::"+x; if(opts.indexOf(o) < 0) opts.push(o); });
+      if(opts.indexOf("деструктор "+kid.cls) < 0) opts.push("деструктор "+kid.cls);
+      if(kid.cls !== c.base){ var alt = (owner === kid.cls ? c.base : kid.cls)+"::"+c.methods[m]; if(opts.indexOf(alt) < 0) opts.push(alt); }
+      opts = opts.slice(0, 4);
+      fill4(opts, function(s){ return c.base+"::метод"+s; });
+      var all = shuffle(opts);
+      var decl = "class "+c.base+" { virtual ~"+c.base+"(); "+c.methods.map(function(x){ return "virtual "+x+"();"; }).join(" ")+" };";
+      if(kid.cls !== c.base) decl += "\nclass "+kid.cls+" : public "+c.base+" — заменяет: "+kid.over.join(", ");
+      return { prompt:"Сборка "+(vs?"Visual Studio":"g++")+", в RCX объект "+kid.cls+". Что вызовется?", kind:"asm",
+        value:decl+"\nmov rax, [rcx]\ncall qword ptr [rax+"+hex(off)+"h]",
+        options:all.map(C), answer:all.indexOf(right),
+        why:"Ячейка = "+hex(off)+"h / 8 = "+(skip + m)+". "+(vs ? "У Visual Studio ячейка 0 — удаляющий деструктор" : "У g++ ячейки 0 и 1 — два деструктора")+
+            ", дальше методы в порядке объявления: ячейка "+(skip + m)+" — "+c.methods[m]+". "+
+            (owner === kid.cls ? kid.cls+" заменил его своим." : kid.cls+" его не заменял, в таблице стоит метод "+c.base+".")+" Раздел П7.6." };
+    }
+  };
+
+  var MANGLE7 = [
+    ["?name@Dog@@UEBAPEBDXZ", [C("Dog::name — открытый виртуальный, const"),C("Dog::name — обычная функция вне класса"),C("name::Dog — конструктор"),C("Dog — таблица виртуальных функций")], 0, "Имена до <code>@@</code> читаются задом наперёд: <code>name@Dog</code> = <code>Dog::name</code>. <code>U</code> — открытый виртуальный, <code>EBA</code> — const (раздел П7.7)."],
+    ["?legs@Animal@@QEBAHXZ", [C("int Animal::legs() const"),C("virtual int Animal::legs()"),C("Animal::Animal(int)"),C("void legs(Animal *)")], 0, "<code>Q</code> — открытый не виртуальный, <code>EBA</code> — const, <code>H</code> — возвращает int, <code>X</code> — без аргументов, <code>Z</code> — конец."],
+    ["?count_legs@@YAHPEAPEAVAnimal@@H@Z", [C("int count_legs(Animal **, int)"),C("Animal::count_legs(int)"),C("void count_legs(Animal *)"),C("int Animal::legs()")], 0, "Сразу <code>@@</code> после имени — функция вне класса, <code>YA</code> — обычная. <code>PEAPEAVAnimal@@</code> — указатель на указатель на класс Animal, <code>H</code> — int."],
+    ["??0Dog@@QEAA@XZ", [C("Dog::Dog() — конструктор"),C("Dog::~Dog() — деструктор"),C("таблица Dog"),C("operator new")], 0, "<code>??0</code> — конструктор, <code>??1</code> — деструктор, <code>??_7</code> — таблица (раздел П7.7)."],
+    ["??1Animal@@UEAA@XZ", [C("virtual Animal::~Animal() — деструктор"),C("Animal::Animal() — конструктор"),C("удаляющий деструктор Animal"),C("таблица Animal")], 0, "<code>??1</code> — деструктор; <code>U</code> — виртуальный."],
+    ["??_GDog@@UEAAPEAXI@Z", [C("удаляющий деструктор Dog (scalar deleting dtor)"),C("конструктор Dog"),C("таблица Dog"),C("operator delete")], 0, "<code>??_G</code> — scalar deleting destructor: ячейка 0 таблицы у Visual Studio (раздел П7.4)."],
+    ["??_7Dog@@6B@", [C("const Dog::`vftable' — таблица виртуальных функций"),C("конструктор Dog"),C("строка RTTI с именем Dog"),C("деструктор Dog")], 0, "<code>??_7</code> — таблица. Её адрес конструктор пишет в первые 8 байт объекта (раздел П7.6)."],
+    ["??2@YAPEAX_K@Z", [C("operator new(unsigned __int64)"),C("operator delete(void *)"),C("конструктор"),C("malloc")], 0, "<code>??2</code> — operator new, <code>??3</code> — operator delete. Аргумент <code>_K</code> — unsigned __int64, размер объекта (раздел П7.4)."],
+    ["_ZNK3Dog4nameEv", [C("Dog::name() const — схема g++"),C("Dog::name() — Visual Studio"),C("vtable for Dog"),C("typeinfo name for Dog")], 0, "<code>_Z</code> — имя C++ у g++, <code>N…E</code> — имя с классом, <code>K</code> — const, числа — длины имён, <code>v</code> — без аргументов."],
+    ["_ZTV3Dog", [C("vtable for Dog"),C("typeinfo for Dog"),C("Dog::~Dog()"),C("Dog::Dog()")], 0, "<code>_ZTV</code> — таблица виртуальных функций у g++, <code>_ZTI</code> — сведения о типе, <code>_ZTS</code> — строка с именем типа."],
+    [".?AVDog@@", [C("имя класса Dog из RTTI"),C("искажённое имя метода Dog"),C("таблица Dog"),C("строка «AVDog» из программы")], 0, "<code>.?AV</code> — класс, <code>.?AU</code> — структура. Поиск строк по <code>.?AV</code> даёт список классов программы (раздел П7.8)."],
+    ["_TI1?AUBadInput@@", [C("описание типа брошенного исключения BadInput"),C("конструктор BadInput"),C("таблица BadInput"),C("обработчик catch")], 0, "<code>_TI</code> — throw info. Его адрес — второй аргумент <code>_CxxThrowException</code> (раздел П7.9)."]
+  ];
+  MODES.mangle7 = { label:"Искажённые имена", make:function(){ return qa(MANGLE7, "Что это за имя?", "code"); } };
+
+  var SIGN7 = [
+    ["mov     rax, [rcx]\ncall    qword ptr [rax+8]", ["виртуальный вызов: ячейка 1 таблицы объекта","вызов конструктора","вызов operator new","чтение поля по смещению 8"], 0, "Взяли адрес таблицы из первых 8 байт объекта и вызвали функцию из ячейки 8 / 8 = 1 (раздел П7.6)."],
+    ["mov     ecx, 18h\ncall    operator new(unsigned __int64)", ["создаётся объект размером 24 байта","создаётся массив из 18 элементов","освобождается 24 байта","вызывается метод номер 18h"], 0, "Единственный аргумент operator new — размер объекта: 18h = 24 байта (раздел П7.4)."],
+    ["lea     rax, Dog::`vftable'\nmov     [rsi], rax", ["конструктор пишет в объект адрес таблицы класса Dog","виртуальный вызов","чтение таблицы","копирование объекта"], 0, "Так конструктор класса с виртуальными функциями отмечает объект своим классом. По этой паре строк конструкторы и находят (раздел П7.4)."],
+    ["test    edx, edx\njz      short skip\nmov     edx, 18h\nmov     rcx, rsi\ncall    operator delete(void *, unsigned __int64)", ["удаляющий деструктор: освободить 24 байта, если во втором аргументе не 0","конструктор","проверка на исключение","цикл по массиву"], 0, "scalar deleting destructor Visual Studio: флаг в EDX говорит, освобождать ли память, а размер объекта передаётся в operator delete (раздел П7.4)."],
+    ["lea     rdx, _TI1?AUBadInput@@\nlea     rcx, [rsp+24h]\ncall    _CxxThrowException", ["throw BadInput — бросок исключения (Visual Studio)","catch BadInput — ловля","конструктор BadInput","вызов деструктора"], 0, "_CxxThrowException: в RCX — объект-ошибка, в RDX — описание его типа. Обратно управление не вернётся (раздел П7.9)."],
+    ["call    __cxa_allocate_exception\n…\ncall    __cxa_throw", ["throw — бросок исключения у g++","выделение памяти под массив","ловля исключения у g++","вызов деструктора"], 0, "У g++ бросок — две функции: выделить объект-ошибку и бросить (упражнение П7.7)."],
+    ["mov     rax, [rcx+8]\nsub     rax, [rcx]\nsar     rax, 2", ["размер std::vector<int>: (конец − начало) / 4","длина std::string","виртуальный вызов","деление на 2"], 0, "Вектор — три указателя; размер не хранится, его вычисляют разностью и сдвигом: sar на 2 — деление на 4, размер int (раздел П7.10)."],
+    ["inc     dword ptr [rcx+10h]", ["метод увеличивает поле объекта по смещению 10h","виртуальный вызов","увеличение счётчика цикла","запись в таблицу"], 0, "RCX — this, [rcx+10h] — поле объекта. Так выглядел встроенный give_bone (раздел П7.3)."],
+    ["mov     rax, [rsi]\nmov     rcx, rsi\nmov     edx, 1\ncall    qword ptr [rax]", ["delete объекта через виртуальный деструктор (Visual Studio)","конструктор","виртуальный вызов name","освобождение без деструктора"], 0, "Ячейка 0 таблицы — удаляющий деструктор, EDX = 1 — «и освободи память» (раздел П7.4)."]
+  ];
+  MODES.sign7 = { label:"Приметы C++", make:function(){ return qa(SIGN7, "Что это в листинге C++?", "asm"); } };
+
+  var WORDS7 = ["gav!","sobaka","ptica","zoo","Animal","hello","reverse","IDA","x64dbg","vtable","Dog::name"];
+  MODES.str7 = {
+    label:"std::string в памяти",
+    make:function(){
+      var hexs = function(arr){ return arr.map(function(b){ return hex(b,2); }).join(" "); };
+      var le8 = function(n){ var b = []; for(var i = 0; i < 8; i++){ b.push(n % 256); n = Math.floor(n / 256); } return b; };
+      var shortStr = Math.random() < 0.5, n, buf, cap, txt = "";
+      if(shortStr){
+        txt = pick(WORDS7); n = txt.length; cap = 15;
+        buf = []; for(var i = 0; i < 16; i++) buf.push(i < n ? txt.charCodeAt(i) : 0);
+      } else {
+        n = ri(16, 40); cap = n | 15;
+        var ptr = 0x18C00000000 + ri(0x1000, 0xFFFFF) * 16;
+        buf = le8(ptr).concat([0,0,0,0,0,0,0,0]);
+      }
+      var dump = hexs(buf.slice(0,8))+"  "+hexs(buf.slice(8,16))+"\n"+hexs(le8(n))+"  "+hexs(le8(cap));
+      var right = (shortStr ? "короткая" : "длинная")+", "+n+" букв";
+      var opts = [right, (shortStr ? "длинная" : "короткая")+", "+n+" букв", (shortStr ? "короткая" : "длинная")+", "+cap+" букв",
+                  (shortStr ? "длинная" : "короткая")+", "+cap+" букв"].filter(function(v,k,a){ return a.indexOf(v) === k; });
+      fill4(opts, function(s){ return (shortStr ? "короткая" : "длинная")+", "+(n + s)+" букв"; });
+      var all = shuffle(opts);
+      return { prompt:"32 байта std::string (Visual Studio, Release). Какая строка и сколько в ней букв?", kind:"code", value:dump,
+        options:all, answer:all.indexOf(right),
+        why:"Вместимость на +18h = "+cap+(cap > 15 ? " — больше 15: строка длинная, в первых 8 байтах адрес текста в куче."
+              : " — строка короткая, текст прямо в объекте"+(txt ? ": «"+esc6(txt)+"»" : "")+".")+
+            " Размер — на +10h: "+n+". Вместимость — не размер: её путают чаще всего (раздел П7.10)." };
+    }
+  };
+
+  var TERMS7 = [
+    ["method","метод","мéсод"], ["constructor","конструктор","констрáктор"], ["destructor","деструктор","дистрáктор"],
+    ["inherit","наследовать","инхéрит"], ["base class","базовый класс","бэйс класс"], ["derived class","производный класс","дирáйвд класс"],
+    ["virtual function","виртуальная функция","вёрчуал фáнкшен"], ["vtable","таблица виртуальных функций","ви-тэйбл"],
+    ["name mangling","искажение имён","нэйм мэ́нглинг"], ["throw","бросить (исключение)","сроу"], ["catch","поймать (исключение)","кэч"],
+    ["standard library","стандартная библиотека","стэ́ндард лáйбрери"]
+  ];
+  MODES.terms7 = {
+    label:"Слова C++",
+    make:function(){
+      var it = pick(TERMS7);
+      var others = shuffle(TERMS7.filter(function(t){ return t !== it; })).slice(0,3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «C++ (приложение П7)»." };
+    }
+  };
+
   /* ── глава 40: профессия реверсера ── */
 
   var PROF40 = [
@@ -2766,6 +2924,7 @@
     { id:"gp4",  ch:"П4",    title:"приложение: читаем документацию Intel", modes:["wordsp4","phrasep4","pseudop4","bookp4"], mix:"mixp4" },
     { id:"gp5",  ch:"П5",    title:"приложение: IDA Pro 9.2", modes:["keysp5","hexp5","synp5","namesp5","xrefp5"], mix:"mixp5" },
     { id:"gp6",  ch:"П6",    title:"приложение: Python для реверсера", modes:["pyout6","bytes6","struct6","c2py6","api6","terms6"], mix:"mixp6" },
+    { id:"gp7",  ch:"П7",    title:"приложение: C++ в дизассемблере", modes:["layout7","slot7","mangle7","sign7","str7","terms7"], mix:"mixp7" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
