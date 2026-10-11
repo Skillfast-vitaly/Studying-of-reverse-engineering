@@ -595,12 +595,13 @@ Microsoft в своей документации зовёт такие имен�
 | `?give_bone@Dog@@QEAAXXZ` | `public: void Dog::give_bone(void)` |
 | `?count_legs@@YAHPEAPEAVAnimal@@H@Z` | `int count_legs(class Animal **, int)` |
 | `??0Dog@@QEAA@XZ` | `public: Dog::Dog(void)` — конструктор |
-| `??_GDog@@UEAAPEAXI@Z` | удаляющий деструктор `Dog` |
+| `??_GDog@@UEAAPEAXI@Z` | `public: virtual void * Dog::'scalar deleting dtor'(unsigned int)` — удаляющий деструктор |
 | `??_7Dog@@6B@` | `const Dog::'vftable'` — таблица |
-| `??2@YAPEAX_K@Z` | `operator new(unsigned __int64)` |
-| `??3@YAXPEAX_K@Z` | `operator delete(void *, unsigned __int64)` |
+| `??2@YAPEAX_K@Z` | `void * operator new(unsigned __int64)` |
+| `??3@YAXPEAX_K@Z` | `void operator delete(void *, unsigned __int64)` |
 
-Расшифровка — настоящий вывод расшифровщика, слово `__cdecl` я убрал.
+Расшифровка — настоящий вывод расшифровщика, слово `__cdecl` я убрал,
+а пояснения после тире добавил сам.
 
 ### Как читать на глаз
 
@@ -1050,9 +1051,9 @@ for Dog`. Сколько в таблице ячеек по 8 байт? Что л
 сам, и восстановить её классы по пути из П7.11.
 
 Дальше по плану приложений — П8 «Rust: язык и дизассемблер»: язык,
-на котором всё чаще пишут и обычные программы, и вредоносы. Его
-я ещё пишу. А пока вернись к основному курсу, к той главе, на которой
-ты сейчас.
+на котором всё чаще пишут и обычные программы, и вредоносы. Оно
+следующее в плане: когда появится, в карте курса (README) у него будет
+✅. А пока вернись к основному курсу, к той главе, на которой ты сейчас.
 
 ---
 
