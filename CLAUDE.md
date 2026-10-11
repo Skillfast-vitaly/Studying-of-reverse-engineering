@@ -1330,6 +1330,25 @@ tools/ida_mcp/     «Наставник IDA» — свой MCP-сервер ку
   в неё на своём w64devkit). Листинги глав 7–20 снимались gcc 13:
   у ученика gcc 16.2, адреса и мелочи могут отличаться — при ревизиях
   сверять через godbolt.
+  Godbolt-MinGW собран с UCRT, а w64devkit — с `msvcrt-os` (Dockerfile):
+  код своих функций совпадает, стартовый код, импорт CRT и адреса
+  в готовом `.exe` — нет. Режим binary на godbolt собирает `.exe`,
+  но адреса брать оттуда нельзя.
+  **Окна инструментов сверены по исходникам (11.10.2026):** DIE 3.21 —
+  группы File type / Architecture / Mode / Type / Sections, результаты
+  Scan («Compiler: MinGW», «Language: C/C++», «Linker: GNU Linker ld
+  (GNU Binutils)», у Microsoft — «Microsoft Visual C/C++»), Strings
+  и Entropy — **кнопки**, у строк поле Min length (5) рядом с ANSI,
+  Unicode; в главе 7 был вывод `file` («PE32+ executable…») — заменён.
+  PE-bear 0.7.2 — вкладки DOS Hdr, Rich Hdr, File Hdr, Optional Hdr,
+  Section Hdrs, Imports, Exports, General, Strings, Disasm; поля Entry
+  Point, Image Base. Главы 6, 7, 8, 16, 17 поправлены.
+  **Заявка: П8 «Rust» пишет эта сессия (`mac-uchenik`)** — по плану
+  П9 → П10 → П8, но П10 после обрыва первым не берём. Rust проверяется
+  настоящим rustc через godbolt (rustc 1.99, `--target
+  x86_64-pc-windows-msvc --crate-type lib`: машинный код без компоновки;
+  срез `&[u32]` = RCX адрес + RDX длина, проверка границ — `cmp rdx, N`
+  + `core::panicking::panic_bounds_check`).
 - 24.09.2026 ученик попросил: «не забывай про интерактивное обучение,
   тренажёр по каждой главе и практику». Тренажёр — артефакт
   https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf (ссылка в README).
