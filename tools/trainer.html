@@ -394,7 +394,7 @@
         <tr><td>Shift+F3</td><td class="t">функции</td><td>: / ;</td><td class="t">комментарий / повторяемый</td></tr>
         <tr><td>Shift+F4</td><td class="t">имена</td><td>F5 / Tab</td><td class="t">псевдокод / туда и обратно</td></tr>
         <tr><td>X</td><td class="t">кто ссылается</td><td>Space</td><td class="t">граф ↔ текст</td></tr>
-        <tr><td>G / Esc</td><td class="t">перейти / назад</td><td>Ctrl+Z / Ctrl+Y</td><td class="t">отменить / вернуть</td></tr>
+        <tr><td>G / Esc</td><td class="t">перейти / назад</td><td>Ctrl+Z / Ctrl+Shift+Z</td><td class="t">отменить / вернуть</td></tr>
         <tr><td>F2, F9, F7, F8</td><td class="t">как в x64dbg</td><td>Ctrl+F7</td><td class="t">до возврата из функции</td></tr>
       </table>
       <p class="sub" style="margin:10px 0"><code>60h</code> = 0x60, <code>0Ah</code> = 0xA. <code>cs:SECRET</code> — память по адресу от RIP. <code>[rbp+var_40]</code> = <code>[rbp-0x40]</code>. <code>jnz</code> = <code>jne</code>. Имена: <code>sub_</code> функция, <code>loc_</code> место в коде, <code>off_</code> адрес, <code>unk_</code> не разобрано, <code>a…</code> строка. XREF: <code>main+7B↑r</code> — main + 7Bh, выше, читает; буквы o/r/w/p/j.</p>
@@ -2237,7 +2237,7 @@
     ["декомпилировать функцию", ["F5","Tab","Space","F9"], 0, "F5 открывает окно Pseudocode. Tab — переключаться туда и обратно (раздел П5.8)."],
     ["туда и обратно: дизассемблер ↔ псевдокод", ["Tab","F5","Space","Esc"], 0, "Tab — на то же место в другом виде (раздел П5.8)."],
     ["граф ↔ сплошной текст", ["Space","Tab","F5","G"], 0, "Пробел переключает вид IDA View. Данные видны только в тексте (раздел П5.4)."],
-    ["отменить последнее действие", ["Ctrl+Z","Ctrl+Y","Esc","Ctrl+F2"], 0, "Ctrl+Z — отменить, Ctrl+Y — вернуть. История живёт только до закрытия IDA (раздел П5.7)."],
+    ["отменить последнее действие", ["Ctrl+Z","Ctrl+Shift+Z","Esc","Ctrl+F2"], 0, "Ctrl+Z — отменить, Ctrl+Shift+Z — вернуть отменённое (в старых статьях про IDA 7.3 — Ctrl+Y). История живёт только до закрытия IDA (раздел П5.7)."],
     ["поставить точку останова (отладчик IDA)", ["F2","F9","F4","Ctrl+F2"], 0, "F2, как в x64dbg (раздел П5.10)."],
     ["запустить программу под отладчиком или продолжить", ["F9","F5","F2","F8"], 0, "F9, как в x64dbg. F5 в IDA — декомпилятор, не отладчик!"],
     ["шаг с обходом (step over)", ["F8","F7","Ctrl+F7","F4"], 0, "F8 — через вызов, F7 — внутрь (раздел П5.10)."],

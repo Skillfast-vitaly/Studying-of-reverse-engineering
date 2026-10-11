@@ -52,8 +52,9 @@ for f in md_files:
                 continue
             add("ССЫЛКА", f"{rel}:{line}", f"нет файла {target}")
 
-    # 4. остатки Linux-инструментов в главах
-    if f.parent == COURSE:
+    # 4. остатки Linux-инструментов во всём, что читает ученик
+    # (CLAUDE.md — для Claude, там objdump законно описывает проверку)
+    if f.parent == COURSE or f.name in ("ANSWERS.md", "GLOSSARY.md", "README.md"):
         for m in re.finditer(r"\b(objdump|readelf|strace|ltrace)\b", text):
             line = text[:m.start()].count("\n") + 1
             add("LINUX", f"{rel}:{line}", f"инструмент {m.group(1)} — курс под Windows")
