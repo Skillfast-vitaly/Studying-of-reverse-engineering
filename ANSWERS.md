@@ -2878,6 +2878,8 @@ U  ntdll.dll       NtCreateFile
 функция `WaitForSingleObject` («ждать один объект»):
 
 ```c
+/* это замена main в программе из упражнения 26.7: #include <windows.h>
+   и функция worker остаются как были */
 int main(void)
 {
     HANDLE h = CreateThread(NULL, 0, worker, NULL, 0, NULL);
