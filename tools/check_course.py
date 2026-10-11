@@ -70,6 +70,14 @@ for f in md_files:
         line = prose[:m.start()].count("\n") + 1
         add("ДУБЛЬ", f"{rel}:~{line}", f"повтор: {frag[:40]!r}")
 
+# 4b. те же остатки в тренажёре: его разборы ученик читает так же, как главы
+trainer = ROOT / "tools" / "trainer.html"
+if trainer.exists():
+    t = trainer.read_text(encoding="utf-8")
+    for m in re.finditer(r"\b(objdump|readelf|strace|ltrace)\b", t):
+        line = t[:m.start()].count("\n") + 1
+        add("LINUX", f"tools/trainer.html:{line}", f"инструмент {m.group(1)} — курс под Windows")
+
 # 6. упражнения глав покрыты ответами
 answers = (ROOT / "ANSWERS.md").read_text(encoding="utf-8") if (ROOT / "ANSWERS.md").exists() else ""
 for f in sorted(COURSE.glob("*.md")):
