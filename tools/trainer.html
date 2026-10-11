@@ -431,8 +431,23 @@
     </div>
   </details>
 
+  <details class="cheat">
+    <summary>Шпаргалка к приложению П9 — сеть</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>слой</th><th>заголовок</th><th>что в нём</th></tr>
+        <tr><td>Null/Loopback · Ethernet</td><td>4 · 14 байт</td><td class="t">петля Npcap · MAC-адреса карты</td></tr>
+        <tr><td>IPv4</td><td>20 байт (0x45)</td><td class="t">адреса; байт 9 — транспорт: 6 TCP, 17 UDP</td></tr>
+        <tr><td>TCP</td><td>20+ байт</td><td class="t">порты, Seq, Ack; байт 12 — длина заголовка, байт 13 — флаги</td></tr>
+        <tr><td>данные</td><td>Len</td><td class="t">протокол программы: HTTP, DNS, кадр задачи 06</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Порядок сети — старший байт первым: 7777 = <code>1e 61</code>; <code>htons</code>/<code>ntohs</code>, в Python <code>struct</code> с <code>&gt;</code>. Флаги: FIN 0x01, SYN 0x02, RST 0x04, PSH 0x08, ACK 0x10; 0x12 — SYN, ACK; 0x18 — PSH, ACK. Ack = Seq + Len другой стороны. Порты: HTTP 80, HTTPS 443, DNS 53, клиенту — 49152–65535.</p>
+      <p class="sub" style="margin:10px 0">Wireshark: петля — <b>Adapter for loopback traffic capture</b>; запись — Ctrl+E; Follow TCP Stream — Ctrl+Alt+Shift+T (клиент красным, сервер синим); HTTP Stream — Ctrl+Alt+Shift+H. Фильтры: <code>tcp.port == 7777</code>, <code>tcp.len &gt; 0</code>, <code>tcp.stream == 0</code>, <code>tcp.flags.syn == 1</code>, <code>dns</code>, <code>tls.handshake.extensions_server_name</code>. Задача 06: кадр = длина (2 байта, порядок сети) + тип + данные; ответ сервера — тип | 0x80; ключ — первый байт данных 0x81.</p>
+    </div>
+  </details>
+
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П7.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П7, П9.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -2614,6 +2629,150 @@
     }
   };
 
+  /* ── приложение П9: разбор сетевого трафика ── */
+
+  function hx9(n){ return hex(n & 0xFF, 2).toLowerCase(); }     /* байт строчными, как в Wireshark */
+  function uniq9(a){ return a.filter(function(v,i,s){ return s.indexOf(v) === i; }); }
+
+  MODES.order9 = {
+    label:"Порядок сети",
+    make:function(){
+      var n = 0;
+      for(var k = 0; k < 20; k++){                               /* старший и младший байты разные */
+        n = pick([ri(256, 65535), pick([7777, 443, 80, 53, 8080, 3389, 300, 0x1234])]);
+        if(((n >> 8) & 0xFF) !== (n & 0xFF)) break;
+      }
+      var b1 = (n >> 8) & 0xFF, b0 = n & 0xFF;
+      var right = hx9(b1)+" "+hx9(b0), swapped = hx9(b0)+" "+hx9(b1);
+      if(Math.random() < 0.5){
+        var opts = uniq9([right, swapped]);
+        fill4(opts, function(s){ var m = (n + s) & 0xFFFF; return hx9(m >> 8)+" "+hx9(m); });
+        var all = shuffle(opts);
+        return { prompt:"Число в заголовке TCP. Какие два байта увидишь в Wireshark?", kind:"code", value:String(n),
+          options:all.map(C), answer:all.indexOf(right),
+          why:n+" = 0x"+hex(n,4)+". В сети — старший байт первым (П9.2): <code>"+right+"</code>. "+
+              "<code>"+swapped+"</code> — порядок x86 из главы 3.7: так это число лежит в памяти программы, а <code>htons</code> переставляет байты." };
+      }
+      var opts2 = uniq9([String(n), String(b0 * 256 + b1)]);
+      fill4(opts2, function(s){ return String(n + s); });
+      var all2 = shuffle(opts2);
+      return { prompt:"Два байта из заголовка TCP. Какое это число?", kind:"code", value:right,
+        options:all2.map(C), answer:all2.indexOf(String(n)),
+        why:"Порядок сети — старший байт первым: 0x"+hex(b1,2)+" × 256 + 0x"+hex(b0,2)+" = "+(b1 * 256)+" + "+b0+" = "+n+
+            ". Если прочитать младшим вперёд, как x86, выйдет "+(b0 * 256 + b1)+" — частая ошибка (П9.2)." };
+    }
+  };
+
+  MODES.seq9 = {
+    label:"Seq и Ack",
+    make:function(){
+      var seq = ri(1, 400), len = ri(1, 120), right = seq + len;
+      var opts = uniq9([right, seq, len, right - 1].map(String));
+      fill4(opts, function(s){ return String(right + s); });
+      var all = shuffle(opts);
+      return { prompt:"Клиент отправил пакет. Какой Ack будет в ответе сервера?", kind:"code",
+        value:"Seq="+seq+" Len="+len, options:all.map(C), answer:all.indexOf(String(right)),
+        why:"Пакет несёт байты с "+seq+" по "+(seq + len - 1)+". Ack — номер следующего байта, который сервер ждёт: "+
+            seq+" + "+len+" = "+right+" (П9.3, таблица в П9.6)." };
+    }
+  };
+
+  var TYPES9 = [
+    [0x01, "клиент здоровается, данные — его имя"], [0x02, "клиент задаёт вопрос, данные — номер, 1 байт"],
+    [0x03, "клиент прощается, данных нет"], [0x81, "сервер приветствует, первый байт данных — ключ сессии"],
+    [0x82, "сервер отвечает, данные под XOR с ключом"], [0x83, "сервер прощается"], [0xEE, "сервер не понял вопрос"]
+  ];
+  MODES.frame9 = {
+    label:"Кадр задачи 06",
+    make:function(){
+      var t = pick(TYPES9), n = ri(2, 300);
+      if(t[0] === 0x03) n = 0;
+      if(t[0] === 0x02) n = 1;
+      var len = n + 1, head = hx9(len >> 8)+" "+hx9(len)+" "+hx9(t[0])+" …";
+      if(Math.random() < 0.5){
+        var opts = uniq9([n, len, (len & 0xFF) * 256 + (len >> 8) - 1, n + 2].map(String));
+        fill4(opts, function(s){ return String(n + 2 + s); });
+        var all = shuffle(opts);
+        return { prompt:"Кадр задачи 06 начинается так. Сколько байт данных идёт после типа?", kind:"code", value:head,
+          options:all.map(C), answer:all.indexOf(String(n)),
+          why:"Первые два байта — длина, старший вперёд: 0x"+hex(len,4)+" = "+len+". Она считает байт типа и данные, "+
+              "значит, данных "+len+" − 1 = "+n+" (П9.9)." };
+      }
+      var others = shuffle(TYPES9.filter(function(x){ return x !== t; })).slice(0, 3);
+      var all2 = shuffle(others.concat([t]));
+      return { prompt:"Что означает третий байт этого кадра?", kind:"code", value:head,
+        options:all2.map(function(x){ return x[1]; }), answer:all2.indexOf(t),
+        why:"Третий байт — тип: 0x"+hex(t[0],2)+" — "+t[1]+". Ответ сервера — тип вопроса с поднятым старшим битом: "+
+            "0x01 | 0x80 = 0x81 (П9.9). Тип 0xEE нашёлся только своим клиентом (П9.11)." };
+    }
+  };
+
+  var FLAGS9 = [[0x01,"FIN"], [0x02,"SYN"], [0x04,"RST"], [0x08,"PSH"], [0x10,"ACK"]];
+  var COMBOS9 = [
+    [0x02, "SYN — первый шаг рукопожатия"], [0x12, "SYN, ACK — второй шаг рукопожатия"],
+    [0x10, "ACK — только подтверждение «получил»"], [0x18, "PSH, ACK — пакет с данными"],
+    [0x11, "FIN, ACK — сторона прощается"], [0x14, "RST, ACK — обрыв, например на порту никто не ждёт"]
+  ];
+  MODES.flags9 = {
+    label:"Флаги TCP",
+    make:function(){
+      var it = pick(COMBOS9);
+      var others = shuffle(COMBOS9.filter(function(x){ return x !== it; })).slice(0, 3);
+      var all = shuffle(others.concat([it]));
+      var parts = FLAGS9.filter(function(f){ return it[0] & f[0]; })
+        .map(function(f){ return "0x"+hex(f[0],2)+" "+f[1]; });
+      return { prompt:"Байт флагов TCP (байт 13 заголовка). Что это за пакет?", kind:"code", value:"0x"+hex(it[0],2),
+        options:all.map(function(x){ return x[1]; }), answer:all.indexOf(it),
+        why:"0x"+hex(it[0],2)+(parts.length > 1 ? " = "+parts.join(" + ") : " — один бит: "+parts[0].split(" ")[1])+
+            ". Биты: FIN 0x01, SYN 0x02, RST 0x04, PSH 0x08, ACK 0x10 (П9.15)." };
+    }
+  };
+
+  var FILT9 = [
+    ["Оставить только разговоры с портом 7777", ["tcp.port == 7777", "port 7777", "tcp == 7777", "ip.addr == 7777"], 0,
+     "Фильтр отображения пишется по полям Wireshark: <code>tcp.port</code> — порт отправителя или получателя. <code>port 7777</code> — запись фильтра захвата, в поле отображения она не сработает (П9.7)."],
+    ["Только пакеты с данными, без голых подтверждений", ["tcp.len > 0", "tcp.flags.ack == 1", "tcp.len == 0", "tcp.stream > 0"], 0,
+     "<code>tcp.len</code> — длина полезной нагрузки (TCP Segment Len). Больше нуля — в пакете есть данные (П9.7)."],
+    ["Начала разговоров: SYN и SYN, ACK", ["tcp.flags.syn == 1", "tcp.flags.fin == 1", "tcp.flags.reset == 1", "tcp.len > 0"], 0,
+     "SYN — бит 0x02, поле <code>tcp.flags.syn</code>. Он поднят в первых двух пакетах рукопожатия (П9.3, П9.7)."],
+    ["Обрывы соединений", ["tcp.flags.reset == 1", "tcp.flags.syn == 1", "tcp.flags.fin == 1", "tcp.stream == 0"], 0,
+     "RST — бит 0x04, поле <code>tcp.flags.reset</code>. Такие строки Wireshark красит жёлтым по тёмно-красному (П9.5)."],
+    ["Один разговор целиком", ["tcp.stream == 0", "tcp.port == 0", "ip.addr == 0", "tcp.seq == 0"], 0,
+     "Wireshark нумерует разговоры TCP с нуля — поле <code>tcp.stream</code>. Такой же фильтр оставляет Follow TCP Stream (П9.8)."],
+    ["Запросы и ответы DNS", ["dns", "http", "tls", "udp.port == 80"], 0,
+     "Фильтр по имени протокола. DNS обычно идёт по UDP, порт 53 (П9.12)."],
+    ["Имя сайта в зашифрованных разговорах", ["tls.handshake.extensions_server_name", "http.host", "dns.qry.name", "tcp.payload"], 0,
+     "Имя сайта лежит в Client Hello — поле SNI (П9.13). <code>http.host</code> внутри TLS не виден: весь HTTP зашифрован."],
+    ["DNS-запрос про example.com", ["dns.qry.name == \"example.com\"", "http.host == \"example.com\"", "dns == example.com", "ip.addr == \"example.com\""], 0,
+     "Имя в запросе — поле <code>dns.qry.name</code>, строка — в кавычках (П9.12)."]
+  ];
+  MODES.filt9 = { label:"Фильтры Wireshark", make:function(){
+    var t = qa(FILT9, "Какой фильтр отображения поставить?", "text");
+    t.options = t.options.map(C);
+    return t;
+  } };
+
+  var TERMS9 = [
+    ["protocol","протокол","прóтокол"], ["packet","пакет","пáкет"], ["payload","полезная нагрузка","пéйлоуд"],
+    ["port","номер программы на компьютере","порт"], ["loopback","петля, адрес «сам себе»","лýп-бэк"],
+    ["network byte order","порядок байтов сети","нéтворк байт óрдер"], ["handshake","рукопожатие","хэ́нд-шейк"],
+    ["socket","сокет, «розетка»","сóкет"], ["display filter","фильтр отображения","дисплéй фúльтер"],
+    ["capture filter","фильтр захвата","кэ́пчер фúльтер"], ["session key","ключ сессии","сéшн ки"],
+    ["certificate","сертификат","сертúфикет"], ["certificate pinning","закрепление сертификата","сертúфикет пúнинг"],
+    ["Server Name Indication","указание имени сервера","сéрвер нэйм индикéйшн"]
+  ];
+  MODES.terms9 = {
+    label:"Слова сети",
+    make:function(){
+      var it = pick(TERMS9);
+      var others = shuffle(TERMS9.filter(function(t){ return t !== it; })).slice(0, 3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «Сеть (приложение П9)»." };
+    }
+  };
+
   /* ── глава 40: профессия реверсера ── */
 
   var PROF40 = [
@@ -2925,6 +3084,7 @@
     { id:"gp5",  ch:"П5",    title:"приложение: IDA Pro 9.2", modes:["keysp5","hexp5","synp5","namesp5","xrefp5"], mix:"mixp5" },
     { id:"gp6",  ch:"П6",    title:"приложение: Python для реверсера", modes:["pyout6","bytes6","struct6","c2py6","api6","terms6"], mix:"mixp6" },
     { id:"gp7",  ch:"П7",    title:"приложение: C++ в дизассемблере", modes:["layout7","slot7","mangle7","sign7","str7","terms7"], mix:"mixp7" },
+    { id:"gp9",  ch:"П9",    title:"приложение: разбор сетевого трафика", modes:["order9","seq9","frame9","flags9","filt9","terms9"], mix:"mixp9" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
