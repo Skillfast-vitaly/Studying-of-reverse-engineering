@@ -33,6 +33,25 @@ bash .claude/skills/verify-example/scripts/build_win.sh пример.c --run "в
 Можно передать несколько файлов (`main.c pte.c` или `main.c my.s`).
 Папка `build-check/` в `.gitignore`, её не коммитят.
 
+## Без кросс-компилятора: MinGW gcc через godbolt
+
+На макбуке ученика кросс-компилятора нет (ставить — только с его
+согласия, `CLAUDE.md`, раздел 5). Тогда компиляцию и листинги даёт
+настоящий MinGW gcc — gcc под Windows, как в w64devkit, — через API
+сайта Compiler Explorer:
+
+```bash
+python3 .claude/skills/verify-example/scripts/godbolt_mingw.py пример.c
+python3 .claude/skills/verify-example/scripts/godbolt_mingw.py пример.c --flags=-O1 --asm check
+```
+
+Заголовки Windows (`windows.h`, `winsock2.h`) там есть, предупреждения
+`-Wall -Wextra` — настоящие. Собрать `.exe` целиком и запустить его так
+нельзя: это `build_win.sh` в облаке или ученик на ПК. 11.10.2026 этим
+путём проверены листинги главы 5 (совпали с `-O1` до инструкции) и задача
+06 (П9). Учти: gcc в листинге пишет числа десятичными (`7777`, `90`),
+IDA и x64dbg показывают их в hex (`1E61h`, `5Ah`).
+
 ## Что можно брать в главу
 
 - **Листинг, факты PE, предупреждения компилятора** — настоящие, бери.
