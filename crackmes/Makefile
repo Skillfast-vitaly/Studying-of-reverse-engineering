@@ -11,6 +11,9 @@
 #
 # Задача 04 (анти-отладка) пока написана под Linux. Под Windows её
 # переделаем к главе 19, поэтому здесь её нет.
+#
+# Задача 06 (приложение П9) — пара программ, сервер и клиент. Им нужна
+# библиотека сети Windows: -lws2_32.
 
 CC      := gcc
 CFLAGS  := -O0 -Wall -Wextra
@@ -18,7 +21,8 @@ BUILD   := build
 SRC     := src
 
 NAMES   := 01_strings 02_xor 03_serial 05_vm
-TARGETS := $(addprefix $(BUILD)/,$(addsuffix .exe,$(NAMES)))
+NET     := 06_proto_server 06_proto_client
+TARGETS := $(addprefix $(BUILD)/,$(addsuffix .exe,$(NAMES) $(NET)))
 
 .PHONY: all hard clean test help
 
@@ -35,9 +39,18 @@ $(BUILD)/%.exe: $(SRC)/%.c | $(BUILD)
 
 $(BUILD)/05_vm.exe: $(SRC)/05_vm_program.h
 
+# сетевые программы задачи 06: в конце — библиотека сети.
+# Явное (статическое) правило сильнее общего $(BUILD)/%.exe в любой версии make.
+$(addprefix $(BUILD)/,$(addsuffix .exe,$(NET))): $(BUILD)/%.exe: $(SRC)/%.c | $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $< -lws2_32
+
 hard: | $(BUILD)
 	@for n in $(NAMES); do \
 		$(CC) -O2 -s -o $(BUILD)/$$n.hard.exe $(SRC)/$$n.c || exit 1; \
+		echo "  sobrano $(BUILD)/$$n.hard.exe"; \
+	done
+	@for n in $(NET); do \
+		$(CC) -O2 -s -o $(BUILD)/$$n.hard.exe $(SRC)/$$n.c -lws2_32 || exit 1; \
 		echo "  sobrano $(BUILD)/$$n.hard.exe"; \
 	done
 
