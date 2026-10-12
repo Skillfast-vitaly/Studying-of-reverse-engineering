@@ -509,7 +509,7 @@ un:
 
 | Компилятор | Имя в файле |
 |---|---|
-| rustc 1.96 и старше | `_ZN7zadacha5zamok8proverka17hfcd155372e8f6368E` |
+| rustc 1.96 и раньше | `_ZN7zadacha5zamok8proverka17hfcd155372e8f6368E` |
 | rustc 1.97 и новее | `_RNvNtCskLUh0hM8zwv_7zadacha5zamok8proverka` |
 
 **Старый вид** похож на имена g++ из П7.7: начало `_ZN`, конец `E`,
