@@ -94,5 +94,19 @@ if missing:
     for t, f in items if show_all else items[:40]:
         print(f"  {t}  ← {f}")
 
+# произношение — русскими буквами (ударение — á, é, ó, ú…). Знаки МФА вроде «ə»
+# ученик с A2 не прочитает: 12.10.2026 так нашлись [кəмáнд] и [кəмпóунент].
+IPA = re.compile(r"[əɪʊɔʌæθðʃʒŋɑɛɜː]")
+ipa = []
+for f in [ROOT / "GLOSSARY.md"] + sorted((ROOT / "course").glob("*.md")):
+    for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        for m in re.finditer(r"`\[([^\]`]+)\]`", line):
+            if IPA.search(m.group(1)):
+                ipa.append(f"{f.name}:{n}: [{m.group(1)}]")
+if ipa:
+    print(f"\nЗнаки МФА в произношении (пиши русскими буквами): {len(ipa)}")
+    for x in ipa:
+        print("  " + x)
+
 print("\nИтог:", f"записей с разным переводом одного термина: {conflicts} — посмотри глазами "
       "(омонимы вроде flag или PE законны)" if conflicts else "разных переводов одного термина нет")
