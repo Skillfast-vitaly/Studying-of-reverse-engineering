@@ -5683,3 +5683,236 @@ abc         → Eto ne chislo
 
 Решил — положи `chisla.c` на GitHub: это твой первый инструмент
 (раздел 40.5).
+
+---
+
+## Задача Н2. Свой шестнадцатеричный дамп
+
+<details>
+<summary>Ступенька 1 — куда смотреть</summary>
+
+Открыть файл и прочитать байты — как `vmdis.c` в главе 20: `fopen`
+с `"rb"`, `fseek` на смещение, `fread`. Аргументы — `argv[1]`,
+`argv[2]`, `argv[3]`, смещение в hex переводит `strtoul(…, NULL, 16)`.
+
+</details>
+
+<details>
+<summary>Ступенька 2 — какой приём</summary>
+
+Читай по 16 байт за раз в массив `unsigned char line[16]`. `fread`
+возвращает, сколько прочитал: в конце файла меньше 16. Для каждой
+строки печатай три части: `%08X` — смещение, `%02X ` — каждый байт,
+потом те же байты буквами: печатные (от 0x20 до 0x7E) как есть, прочие —
+точкой.
+
+</details>
+
+<details>
+<summary>Ступенька 3 — почти решение</summary>
+
+```c
+while (done < count) {
+    size_t want = (count - done < 16) ? (size_t)(count - done) : 16;
+    size_t got = fread(line, 1, want, f);
+    if (got == 0)
+        break;
+    /* смещение, байты (недостающие — тремя пробелами), буквы */
+    done += (uint32_t)got;
+}
+```
+
+</details>
+
+<details>
+<summary>Эталонное решение</summary>
+
+```c
+/* hexdump.c — свой шестнадцатеричный дамп файла (задача Н2) */
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+int main(int argc, char **argv)
+{
+    if (argc < 2) {
+        printf("Ispolzovanie: hexdump fajl [smeshchenie_hex] [skolko_bajt]\n");
+        return 1;
+    }
+    FILE *f = fopen(argv[1], "rb");
+    if (f == NULL) {
+        printf("Ne mogu otkryt %s\n", argv[1]);
+        return 1;
+    }
+    uint32_t offset = (argc > 2) ? (uint32_t)strtoul(argv[2], NULL, 16) : 0;
+    uint32_t count  = (argc > 3) ? (uint32_t)strtoul(argv[3], NULL, 10) : 256;
+    if (fseek(f, (long)offset, SEEK_SET) != 0) {
+        printf("Net takogo smeshcheniya\n");
+        fclose(f);
+        return 1;
+    }
+
+    unsigned char line[16];
+    uint32_t done = 0;
+    while (done < count) {
+        size_t want = (count - done < 16) ? (size_t)(count - done) : 16;
+        size_t got = fread(line, 1, want, f);
+        if (got == 0)
+            break;
+        printf("%08X  ", (unsigned)(offset + done));      /* смещение в файле */
+        for (size_t i = 0; i < 16; i++) {
+            if (i < got)
+                printf("%02X ", line[i]);
+            else
+                printf("   ");
+            if (i == 7)
+                printf(" ");                                /* щель посередине, как в HxD */
+        }
+        printf(" ");
+        for (size_t i = 0; i < got; i++)                    /* те же байты как текст */
+            printf("%c", (line[i] >= 0x20 && line[i] < 0x7F) ? line[i] : '.');
+        printf("\n");
+        done += (uint32_t)got;
+        if (got < want)
+            break;                                          /* файл кончился */
+    }
+    fclose(f);
+    return 0;
+}
+```
+
+Как я проверял: MinGW gcc 16.2 (как в w64devkit) собирает без
+предупреждений и с `-O0`, и с `-O2 -s`; вывод на `t64.exe` из pip
+совпал с байтами файла.
+
+</details>
+
+## Задача Н3. Паспорт файла PE на C
+
+<details>
+<summary>Ступенька 1 — куда смотреть</summary>
+
+Глава 8: `e_lfanew` на смещении `0x3C` → подпись `PE\0\0` → заголовок
+файла (20 байт: `Machine` +0, `NumberOfSections` +2,
+`SizeOfOptionalHeader` +16) → опциональный заголовок (`Magic` +0,
+`AddressOfEntryPoint` +16, `ImageBase` +24 у PE32+ и +28 у PE32) →
+таблица секций сразу после опционального заголовка, по 40 байт.
+
+</details>
+
+<details>
+<summary>Ступенька 2 — какой приём</summary>
+
+Прочитай первые 4096 байт файла в массив: все заголовки там. Числа
+собирай из байтов функциями: младший байт первым, `p[0] | p[1] << 8`
+и так далее (П1.2). Не накладывай структуру на массив: из-за
+выравнивания (П1.4) поля могут не совпасть со смещениями файла.
+Права секции — биты поля `Characteristics` (+36): `0x20000000` —
+выполнять, `0x40000000` — читать, `0x80000000` — писать.
+
+</details>
+
+<details>
+<summary>Ступенька 3 — почти решение</summary>
+
+```c
+uint32_t pe = rd32(buf + 0x3C);
+const uint8_t *coff = buf + pe + 4;
+const uint8_t *opt  = coff + 20;
+const uint8_t *sec  = opt + rd16(coff + 16);     /* первая секция */
+uint64_t base = (rd16(opt) == 0x20B) ? rd64(opt + 24) : rd32(opt + 28);
+```
+
+</details>
+
+<details>
+<summary>Эталонное решение</summary>
+
+```c
+/* peinfo.c — паспорт файла PE на C (задача Н3) */
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+
+/* числа в файле PE лежат младшим байтом вперёд (глава 3.7) */
+static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
+static uint32_t rd32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+static uint64_t rd64(const uint8_t *p) { return (uint64_t)rd32(p) | (uint64_t)rd32(p + 4) << 32; }
+
+static const char *machine_name(uint16_t m)
+{
+    switch (m) {
+    case 0x8664: return "x64";
+    case 0x014C: return "x86";
+    case 0xAA64: return "ARM64";
+    default:     return "?";
+    }
+}
+
+int main(int argc, char **argv)
+{
+    static uint8_t buf[4096];                /* заголовки целиком помещаются в 4 КБ */
+    if (argc < 2) {
+        printf("Ispolzovanie: peinfo fajl.exe\n");
+        return 1;
+    }
+    FILE *f = fopen(argv[1], "rb");
+    if (f == NULL) {
+        printf("Ne mogu otkryt %s\n", argv[1]);
+        return 1;
+    }
+    size_t n = fread(buf, 1, sizeof buf, f);
+    fclose(f);
+
+    if (n < 0x40 || buf[0] != 'M' || buf[1] != 'Z') {
+        printf("Eto ne PE: v nachale net MZ\n");
+        return 1;
+    }
+    uint32_t pe = rd32(buf + 0x3C);           /* где PE-заголовок (глава 8.3) */
+    if (pe > n - 24 || memcmp(buf + pe, "PE\0\0", 4) != 0) {
+        printf("Net podpisi PE\n");
+        return 1;
+    }
+    const uint8_t *coff = buf + pe + 4;       /* заголовок файла, 20 байт (глава 8.4) */
+    uint16_t machine = rd16(coff);
+    uint16_t nsec    = rd16(coff + 2);
+    uint16_t optsize = rd16(coff + 16);
+    const uint8_t *opt = coff + 20;           /* опциональный заголовок (глава 8.5) */
+    uint16_t magic = rd16(opt);
+    uint32_t entry = rd32(opt + 16);
+    uint64_t base  = (magic == 0x20B) ? rd64(opt + 24) : rd32(opt + 28);
+
+    printf("Machine:     0x%04X (%s)\n", machine, machine_name(machine));
+    printf("Magic:       0x%03X (%s)\n", magic,
+           magic == 0x20B ? "PE32+, 64 bita" : magic == 0x10B ? "PE32, 32 bita" : "?");
+    printf("Sekcij:      %u\n", nsec);
+    printf("ImageBase:   0x%llX\n", (unsigned long long)base);
+    printf("EntryPoint:  RVA 0x%X, v pamyati 0x%llX\n", entry, (unsigned long long)(base + entry));
+
+    printf("\nImya      Adres(RVA) VPamyati  VFajle    Prava\n");
+    const uint8_t *sec = opt + optsize;       /* таблица секций, по 40 байт (глава 8.6) */
+    for (unsigned i = 0; i < nsec && sec + 40 <= buf + n; i++, sec += 40) {
+        char name[9] = {0};
+        memcpy(name, sec, 8);
+        uint32_t vsize = rd32(sec + 8), vaddr = rd32(sec + 12);
+        uint32_t rawsize = rd32(sec + 16), ch = rd32(sec + 36);
+        printf("%-8s  %08X   %08X  %08X  %c%c%c\n", name, vaddr, vsize, rawsize,
+               (ch & 0x40000000) ? 'R' : '-',        /* читать */
+               (ch & 0x80000000) ? 'W' : '-',        /* писать */
+               (ch & 0x20000000) ? 'X' : '-');       /* выполнять */
+    }
+    return 0;
+}
+```
+
+Как я проверял: собрано MinGW gcc 16.2 без предупреждений; прогнано
+на трёх настоящих файлах из pip — `t64.exe` (x64), `t32.exe` (x86)
+и `t64-arm.exe` (ARM64). Magic, точка входа, ImageBase и адреса секций
+совпали с разбором другой, независимой программы чтения PE. Размер
+секции она печатает как меньший из «в памяти» и «в файле» — поэтому
+у `.data` у неё 0x1400.
+
+</details>
