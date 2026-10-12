@@ -610,6 +610,94 @@
     }
   };
 
+  /* ── гл. 3: ещё четыре навыка — двоичная, четвёрки бит, знак в 4 байтах, байты в память ── */
+
+  function bits8(n){ var b = n.toString(2); while(b.length < 8) b = "0"+b; return b.slice(0,4)+" "+b.slice(4); }
+
+  MODES.bin2dec = {
+    label:"BIN → DEC", drill:true,
+    make:function(){
+      var n = ri(1,255), b = bits8(n);
+      return {
+        prompt:"Переведи двоичное число в десятичное",
+        value:b,
+        check:function(s){ return parseInt(s.trim(),10) === n; },
+        right:String(n),
+        why:function(){
+          var parts = [], w = 128, raw = b.replace(" ","");
+          for(var i=0;i<8;i++){ if(raw[i]==="1") parts.push(w); w/=2; }
+          return "Веса разрядов слева направо: 128, 64, 32, 16, 8, 4, 2, 1. Складываем веса там, где стоит единица: "+
+                 parts.join(" + ")+" = <code>"+n+"</code> (раздел 3.2).";
+        }
+      };
+    }
+  };
+
+  MODES.hexbin = {
+    label:"HEX ↔ BIN", drill:true,
+    make:function(){
+      var n = ri(0,255), h = hex(n,2), b = bits8(n), toBin = Math.random() < 0.5;
+      function nib(){ return "<code>"+h[0]+"</code> = <code>"+b.slice(0,4)+"</code>, <code>"+h[1]+"</code> = <code>"+b.slice(5)+"</code>"; }
+      if(toBin) return {
+        prompt:"Переведи в двоичную — по 4 бита на каждую hex-цифру",
+        value:"0x"+h,
+        check:function(s){ var t = s.replace(/\s/g,"").replace(/^0b/i,""); return /^[01]+$/.test(t) && parseInt(t,2) === n; },
+        right:b,
+        why:function(){ return "Каждая hex-цифра — ровно четыре бита, переводим по отдельности: "+nib()+". Вместе: <code>"+b+"</code> (раздел 3.4)."; }
+      };
+      return {
+        prompt:"Переведи в шестнадцатеричную — по 4 бита на цифру",
+        value:b,
+        check:function(s){ var t = s.trim().toUpperCase().replace(/^0X/,"").replace(/H$/,""); return /^[0-9A-F]+$/.test(t) && parseInt(t,16) === n; },
+        right:"0x"+h,
+        why:function(){ return "Делим на четвёрки и каждую переводим в одну hex-цифру: "+nib()+". Вместе: <code>0x"+h+"</code> (раздел 3.4)."; }
+      };
+    }
+  };
+
+  MODES.signed32 = {
+    label:"Знак в 4 байтах", drill:true,
+    make:function(){
+      var raw = pick([0xFFFFFFFF,0xFFFFFFFE,0xFFFFFFF6,0xFFFFFF9C,0xFFFFFC18,0xFFFF0000,0x80000000,0x7FFFFFFF,0x00000064,0x0000FFFF,0x000003E8]);
+      var val = raw >= 0x80000000 ? raw - 4294967296 : raw;
+      return {
+        prompt:"Четыре байта как ЗНАКОВОЕ число (int)",
+        value:"0x"+hex(raw,8),
+        check:function(s){ var t = s.replace(/\s/g,"").replace(/−/g,"-"); return /^[-+]?\d+$/.test(t) && parseInt(t,10) === val; },
+        right:String(val),
+        why:function(){
+          if(raw < 0x80000000) return "Старший бит — 0 (первая hex-цифра меньше 8), число положительное: знаковое и беззнаковое совпадают, <code>"+val+"</code> (раздел 3.6).";
+          return "Старший бит — 1 (первая hex-цифра 8 или больше), число отрицательное. Как беззнаковое это "+raw+
+                 ", вычитаем 2³² = 4294967296: "+raw+" − 4294967296 = <code>"+val+"</code>."+
+                 (raw === 0xFFFFFFFF ? " Тот самый −1, которым функции Windows сообщают об ошибке (задание 3.Г)." : "")+" Раздел 3.6.";
+        }
+      };
+    }
+  };
+
+  MODES.endian2 = {
+    label:"Число → байты", drill:true,
+    make:function(){
+      var n = pick([ri(1,255), ri(256,65535), ri(65536,16777215), pick([1000,300,256,4096,65535,0x12345678])]);
+      var h8 = hex(n,8), bytes = [h8.slice(6,8), h8.slice(4,6), h8.slice(2,4), h8.slice(0,2)];
+      var asHex = Math.random() < 0.5;
+      return {
+        prompt:"Как это число (int, 4 байта) ляжет в память x86?",
+        value:asHex ? "0x"+hex(n) : String(n),
+        check:function(s){
+          var t = s.toUpperCase().replace(/0X/g,"").replace(/[,\s]+/g," ").trim();
+          var parts = t.indexOf(" ") >= 0 ? t.split(" ") : (t.match(/../g) || []);
+          return parts.length === 4 && parts.every(function(p, i){ return /^[0-9A-F]{1,2}$/.test(p) && parseInt(p,16) === parseInt(bytes[i],16); });
+        },
+        right:bytes.join(" "),
+        why:function(){
+          return (asHex ? "" : String(n)+" = <code>0x"+hex(n)+"</code>. ")+"Дополняем до 4 байтов: <code>"+h8.match(/../g).join(" ")+
+                 "</code>. В памяти x86 младший байт идёт первым — переворачиваем: <code>"+bytes.join(" ")+"</code> (раздел 3.7).";
+        }
+      };
+    }
+  };
+
   /* ───────── главы 0–15: общий помощник ───────── */
 
   function fill4(arr, gen){
@@ -3255,7 +3343,7 @@
 
   var GROUPS = [
     { id:"g02",  ch:"0–2",   title:"основы: закон, компьютер, путь к .exe", modes:["law","bits","build"], mix:"mix02" },
-    { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","endian","ascii","signed"], mix:"mix3" },
+    { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","bin2dec","hexbin","endian","endian2","ascii","signed","signed32"], mix:"mix3" },
     { id:"g45",  ch:"4–5",   title:"память и язык C", modes:["areas","elem","cread"], mix:"mix45" },
     { id:"g68",  ch:"6–8",   title:"инструменты, первое вскрытие, формат PE", modes:["tool","pe","rva"], mix:"mix68" },
     { id:"g912", ch:"9–12",  title:"язык машины: регистры, инструкции, стек, вызовы", modes:["regs","jumps","ins","frame","rspframe","cc","api"], mix:"mix912" },
