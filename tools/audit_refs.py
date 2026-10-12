@@ -59,8 +59,8 @@ for f in sorted(COURSE.glob("*.md")):
         m = re.match(r"## (П?\d+)\.(\d+)\.", l)
         if m:
             heads.add(m.group(1) + "." + m.group(2))
-ref = re.compile(r"(?<![\d.\w/])(П\d+|[1-4]?\d)\.([1-9]\d?)(?![\d.]*\d)(?=[\s,)–—:;»]|\.\s|$)")
-version = re.compile(r"(rustc|python|py|версия|версии|v|под|ida|ghidra|wireshark|npcap|gcc)[\s:-]*$", re.I)
+ref = re.compile(r"(?<![\d.\w/])(П\d+|[1-4]?\d)\.([1-9]\d?)(?![\d.]*\d)(?=[\s,)–—:;»]|\.(?:\s|$)|$)")
+version = re.compile(r"(rustc|python|py|версия|версии|v|под|ida|ghidra|wireshark|npcap|gcc|cl|msvc)[\s:`-]*$", re.I)
 bad_sections = 0
 for f in sorted(COURSE.glob("*.md")) + [ROOT / "ANSWERS.md", ROOT / "PRACTICE.md", ROOT / "CAREER.md"]:
     if not f.exists():
