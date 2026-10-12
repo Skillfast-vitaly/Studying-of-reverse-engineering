@@ -2907,6 +2907,11 @@ int main(void)
 
 ---
 
+### 26.8. Задача Н4
+
+Подсказки по ступеням и эталон — в разделе «Задача Н4» в конце этого
+файла.
+
 ## Глава 27. Kernel mode и user mode
 
 ### 27.1. Номер кольца по `CS`
@@ -6033,3 +6038,124 @@ print('dobavil, zapisej:', len(table))
 Решил — оформи разбор (скилл `writeup`): формат файла с таблицей полей,
 формула суммы и твой скрипт. Это хорошая строчка портфолио: «восстановил
 формат файла и контрольную сумму по машинному коду».
+
+---
+
+## Задача Н4. Карта памяти своего процесса
+
+<details>
+<summary>Ступенька 1 — куда смотреть</summary>
+
+`VirtualQuery(адрес, &mbi, sizeof mbi)` из главы 26 возвращает
+`sizeof mbi`, если всё хорошо, и заполняет `MEMORY_BASIC_INFORMATION`:
+`BaseAddress` — начало области, `RegionSize` — её размер, `State`,
+`Type`, `Protect`. Границы адресов для программ даёт `GetSystemInfo`.
+
+</details>
+
+<details>
+<summary>Ступенька 2 — какой приём</summary>
+
+Цикл «спросил — напечатал — перешагнул»: следующий адрес — это
+`BaseAddress + RegionSize`, тогда каждая область печатается ровно
+один раз. Права собери из младшего байта `Protect` (таблица 26.8)
+и отдельно проверь бит `PAGE_GUARD` (`0x100`). У областей `Reserve`
+прав ещё нет — печатай пустое место.
+
+</details>
+
+<details>
+<summary>Ступенька 3 — почти решение</summary>
+
+```c
+unsigned char *addr = (unsigned char *)si.lpMinimumApplicationAddress;
+while (addr < end && VirtualQuery(addr, &mbi, sizeof mbi) == sizeof mbi) {
+    if (mbi.State != MEM_FREE) {
+        /* печать адреса, размера, состояния, типа и прав */
+    }
+    addr = (unsigned char *)mbi.BaseAddress + mbi.RegionSize;
+}
+```
+
+</details>
+
+<details>
+<summary>Эталонное решение</summary>
+
+```c
+/* karta.c — карта памяти своего процесса (задача Н4) */
+#include <windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* права пятью буквами, как в x64dbg и в главе 26.8: E R W C G */
+static void prot5(DWORD p, char *out)
+{
+    switch (p & 0xFF) {
+    case PAGE_NOACCESS:          strcpy(out, "-----"); break;
+    case PAGE_READONLY:          strcpy(out, "-R---"); break;
+    case PAGE_READWRITE:         strcpy(out, "-RW--"); break;
+    case PAGE_WRITECOPY:         strcpy(out, "-RWC-"); break;
+    case PAGE_EXECUTE:           strcpy(out, "E----"); break;
+    case PAGE_EXECUTE_READ:      strcpy(out, "ER---"); break;
+    case PAGE_EXECUTE_READWRITE: strcpy(out, "ERW--"); break;
+    case PAGE_EXECUTE_WRITECOPY: strcpy(out, "ERWC-"); break;
+    default:                     strcpy(out, "?????"); break;
+    }
+    if (p & PAGE_GUARD)
+        out[4] = 'G';
+}
+
+static const char *state_name(DWORD s)
+{
+    return s == MEM_COMMIT ? "Commit " : s == MEM_RESERVE ? "Reserve" : "Free   ";
+}
+
+static const char *type_name(DWORD t)
+{
+    return t == MEM_IMAGE ? "Image  " : t == MEM_MAPPED ? "Mapped " : t == MEM_PRIVATE ? "Private" : "       ";
+}
+
+int main(void)
+{
+    int local = 7;
+    char *heap = malloc(100);
+    printf("main: %016llX  lokalnaya: %016llX  kucha: %016llX\n\n",
+           (unsigned long long)(ULONG_PTR)main,
+           (unsigned long long)(ULONG_PTR)&local,
+           (unsigned long long)(ULONG_PTR)heap);
+
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    unsigned char *addr = (unsigned char *)si.lpMinimumApplicationAddress;
+    unsigned char *end  = (unsigned char *)si.lpMaximumApplicationAddress;
+
+    printf("Adres             Razmer, KB  Sostoyanie Tip     Prava\n");
+    MEMORY_BASIC_INFORMATION mbi;
+    unsigned regions = 0;
+    while (addr < end && VirtualQuery(addr, &mbi, sizeof mbi) == sizeof mbi) {
+        if (mbi.State != MEM_FREE) {                 /* свободные дыры не печатаем */
+            char prot[6] = "     ";
+            if (mbi.State == MEM_COMMIT)
+                prot5(mbi.Protect, prot);
+            printf("%016llX  %10llu  %s    %s %s\n",
+                   (unsigned long long)(ULONG_PTR)mbi.BaseAddress,
+                   (unsigned long long)(mbi.RegionSize / 1024),
+                   state_name(mbi.State), type_name(mbi.Type), prot);
+            regions++;
+        }
+        addr = (unsigned char *)mbi.BaseAddress + mbi.RegionSize;   /* следующая область */
+    }
+    printf("\nZanyatyh oblastej: %u\n", regions);
+    free(heap);
+    return local == 7 ? 0 : 1;
+}
+```
+
+Как я проверял: MinGW gcc 16.2 с заголовками Windows собирает без
+предупреждений и с `-O0`, и с `-O2 -s`. Запустить программу Windows
+мне не на чем, поэтому её вывод жду от тебя. Что должно найтись
+на карте — в условии задачи.
+
+</details>
