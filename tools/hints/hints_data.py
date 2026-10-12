@@ -60,7 +60,7 @@ ENTRIES = [
          short="EAX → RAX со знаком",
          what="Расширяет EAX до RAX со знаком. То же, что movsxd rax, eax, "
               "только короче.",
-         flags="не меняет", ch=["20.4"]),
+         flags="не меняет", ch=["10.2", "20.4"]),
     dict(m="cwde", en="convert word to doubleword (extended)",
          say="си-дабл-ю-ди-и", ru="расширить слово до двойного слова",
          short="AX → EAX со знаком",

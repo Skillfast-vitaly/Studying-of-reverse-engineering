@@ -15,6 +15,7 @@
 | № | Вид | Задача | После главы | Сложность | Решена |
 |---|---|---|---|---|---|
 | Н1 | напиши сам | `chisla.c` — число в четырёх видах | 5 | ★ | |
+| Н5 | напиши сам | ручной декомпилятор — шесть функций из листинга обратно в C | 12 | ★★ | |
 | 01 | разбери | `01_strings` — пароль открытым текстом | 16 | ★ | |
 | 02 | разбери | `02_xor` — пароль под XOR | 17 | ★ | |
 | 03 | разбери | `03_serial` — правило серийного номера | 18 | ★★ | |
@@ -72,6 +73,193 @@ gcc -O0 -Wall -o chisla.exe chisla.c
 
 Подсказки по ступеням и эталонное решение — в `ANSWERS.md`, раздел
 «Задача Н1». Сначала попробуй сам.
+
+---
+
+## Н5. Ручной декомпилятор ★★
+
+**После главы 12.** Опирается на главы 9–12 (регистры и флаги,
+инструкции, стековый кадр, соглашение о вызовах) и на главу 5: писать
+придётся обычный C.
+
+Декомпилятор (глава 14) делает это за секунду. Сделай сам, руками, —
+тогда потом будешь видеть, где декомпилятор ошибается.
+
+Ниже — шесть функций, которые выдал MinGW gcc 16.2 (тот же, что
+у тебя в w64devkit) с ключами `-O0 -masm=intel`. Для каждой напиши
+на C функцию, которая даёт **точно такой же** листинг.
+
+**Как проверять.** Открой godbolt.org, настрой как в главе 5 (MinGW
+gcc 16.2, `-O0 -masm=intel`), вставь свою функцию — справа должно
+получиться то же самое, инструкция в инструкцию. Номера меток (`.L4`,
+`.L7`) могут отличаться. Имя функции godbolt покажет в кавычках
+(`"f1":`), это неважно.
+
+**Правила:** только то, что было в главе 5: `int`, `char`, указатели,
+`if`, `for` и `while`, структуры. Типы выбирай по самим инструкциям:
+размер — по `DWORD` / `QWORD` / `BYTE`, знак — по переходу (`jl` или
+`jb`, раздел 9.8).
+
+**f1** ★ — разминка:
+
+```
+f1:
+    push    rbp
+    mov     rbp, rsp
+    mov     DWORD PTR 16[rbp], ecx
+    mov     DWORD PTR 24[rbp], edx
+    mov     eax, DWORD PTR 16[rbp]
+    lea     edx, 0[0+rax*4]
+    mov     eax, DWORD PTR 24[rbp]
+    add     eax, edx
+    sub     eax, 7
+    pop     rbp
+    ret
+```
+
+**f2** ★ — одно условие:
+
+```
+f2:
+    push    rbp
+    mov     rbp, rsp
+    mov     DWORD PTR 16[rbp], ecx
+    cmp     DWORD PTR 16[rbp], 0
+    jns     .L4
+    mov     eax, DWORD PTR 16[rbp]
+    neg     eax
+    jmp     .L5
+.L4:
+    mov     eax, DWORD PTR 16[rbp]
+.L5:
+    pop     rbp
+    ret
+```
+
+**f3** ★★ — цикл по массиву:
+
+```
+f3:
+    push    rbp
+    mov     rbp, rsp
+    sub     rsp, 16
+    mov     QWORD PTR 16[rbp], rcx
+    mov     DWORD PTR 24[rbp], edx
+    mov     DWORD PTR 32[rbp], r8d
+    mov     DWORD PTR -4[rbp], 0
+    mov     DWORD PTR -8[rbp], 0
+    jmp     .L7
+.L9:
+    mov     eax, DWORD PTR -8[rbp]
+    cdqe
+    lea     rdx, 0[0+rax*4]
+    mov     rax, QWORD PTR 16[rbp]
+    add     rax, rdx
+    mov     eax, DWORD PTR [rax]
+    cmp     DWORD PTR 32[rbp], eax
+    jge     .L8
+    mov     eax, DWORD PTR -8[rbp]
+    cdqe
+    lea     rdx, 0[0+rax*4]
+    mov     rax, QWORD PTR 16[rbp]
+    add     rax, rdx
+    mov     eax, DWORD PTR [rax]
+    add     DWORD PTR -4[rbp], eax
+.L8:
+    add     DWORD PTR -8[rbp], 1
+.L7:
+    mov     eax, DWORD PTR -8[rbp]
+    cmp     eax, DWORD PTR 24[rbp]
+    jl      .L9
+    mov     eax, DWORD PTR -4[rbp]
+    add     rsp, 16
+    pop     rbp
+    ret
+```
+
+**f4** ★★ — цикл по строке (`47` и `57` — числа из главы 3):
+
+```
+f4:
+    push    rbp
+    mov     rbp, rsp
+    sub     rsp, 16
+    mov     QWORD PTR 16[rbp], rcx
+    mov     DWORD PTR -4[rbp], 0
+    jmp     .L12
+.L14:
+    mov     rax, QWORD PTR 16[rbp]
+    movzx   eax, BYTE PTR [rax]
+    cmp     al, 47
+    jle     .L13
+    mov     rax, QWORD PTR 16[rbp]
+    movzx   eax, BYTE PTR [rax]
+    cmp     al, 57
+    jg      .L13
+    add     DWORD PTR -4[rbp], 1
+.L13:
+    add     QWORD PTR 16[rbp], 1
+.L12:
+    mov     rax, QWORD PTR 16[rbp]
+    movzx   eax, BYTE PTR [rax]
+    test    al, al
+    jne     .L14
+    mov     eax, DWORD PTR -4[rbp]
+    add     rsp, 16
+    pop     rbp
+    ret
+```
+
+**f5** ★★ — структура через указатель (придумай ей имя сам):
+
+```
+f5:
+    push    rbp
+    mov     rbp, rsp
+    mov     QWORD PTR 16[rbp], rcx
+    mov     rax, QWORD PTR 16[rbp]
+    mov     edx, DWORD PTR [rax]
+    mov     rax, QWORD PTR 16[rbp]
+    mov     eax, DWORD PTR 4[rax]
+    imul    edx, eax
+    mov     rax, QWORD PTR 16[rbp]
+    mov     eax, DWORD PTR 8[rax]
+    add     eax, edx
+    pop     rbp
+    ret
+```
+
+**f6** ★★ — вызов чужой функции `g`, её только объяви: `int g(…);`
+
+```
+f6:
+    push    rbp
+    mov     rbp, rsp
+    sub     rsp, 48
+    mov     DWORD PTR 16[rbp], ecx
+    mov     eax, DWORD PTR 16[rbp]
+    lea     edx, 5[rax]
+    mov     eax, DWORD PTR 16[rbp]
+    mov     DWORD PTR 32[rsp], edx
+    mov     r9d, 4
+    mov     r8d, 3
+    mov     edx, 2
+    mov     ecx, eax
+    call    g
+    add     eax, 1
+    add     rsp, 48
+    pop     rbp
+    ret
+```
+
+**Готово, когда** все шесть функций дают на godbolt тот же листинг.
+Пришли мне свой C — проверю.
+
+Если хочешь больше: поставь `-O1` и посмотри, во что превратились твои
+функции. Какие строки исчезли и почему? Где теперь живут переменные?
+
+Подсказки по ступеням и эталонное решение — в `ANSWERS.md`, раздел
+«Задача Н5». Сначала попробуй сам.
 
 ---
 
