@@ -1942,6 +1942,11 @@ Procmon только **наблюдает**, он ничего не запуск
 значения `Runs`), в `R9D` — `4` (тип `REG_DWORD`). Всё сходится
 с исходником.
 
+Адреса здесь из моей сборки gcc 13, у тебя они свои. А три строки
+вокруг вызова у gcc 16.2 те же (проверено через godbolt): `MOV RAX,
+qword ptr [__imp_RegSetValueExW]`, `CALL RAX`, `MOV RAX,qword ptr
+[RBP + local_18]`.
+
 ### 15.5. Запись вызовов `RegSetValueExW`
 
 Сигнатура из документации Microsoft:
