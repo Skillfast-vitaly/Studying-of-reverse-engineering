@@ -2549,7 +2549,7 @@
     }
   };
 
-  /* ── приложение П7: C++ (раскладка и имена сверены компилятором: clang в режиме MSVC и MinGW g++) ── */
+  /* ── приложение П7: C++ (раскладка и имена сверены компиляторами: cl 19.51 из Visual Studio 2026 и MinGW g++ 16.2) ── */
 
   var CTYPES7 = [["char",1],["short",2],["int",4],["long long",8]];
   function al7(x, a){ return Math.ceil(x / a) * a; }
@@ -2621,6 +2621,7 @@
     ["??0Dog@@QEAA@XZ", [C("Dog::Dog() — конструктор"),C("Dog::~Dog() — деструктор"),C("таблица Dog"),C("operator new")], 0, "<code>??0</code> — конструктор, <code>??1</code> — деструктор, <code>??_7</code> — таблица (раздел П7.7)."],
     ["??1Animal@@UEAA@XZ", [C("virtual Animal::~Animal() — деструктор"),C("Animal::Animal() — конструктор"),C("удаляющий деструктор Animal"),C("таблица Animal")], 0, "<code>??1</code> — деструктор; <code>U</code> — виртуальный."],
     ["??_GDog@@UEAAPEAXI@Z", [C("удаляющий деструктор Dog (scalar deleting dtor)"),C("конструктор Dog"),C("таблица Dog"),C("operator delete")], 0, "<code>??_G</code> — scalar deleting destructor: ячейка 0 таблицы у Visual Studio (раздел П7.4)."],
+    ["??_EDog@@UEAAPEAXI@Z", [C("удаляющий деструктор Dog, умеющий удалять массивы (vector deleting dtor)"),C("деструктор Dog"),C("таблица Dog"),C("operator new[]")], 0, "<code>??_E</code> — vector deleting destructor. Именно на него ссылается ячейка 0 таблицы; если массивов объектов в программе нет, компоновщик ставит туда <code>??_G</code> (раздел П7.4)."],
     ["??_7Dog@@6B@", [C("const Dog::`vftable' — таблица виртуальных функций"),C("конструктор Dog"),C("строка RTTI с именем Dog"),C("деструктор Dog")], 0, "<code>??_7</code> — таблица. Её адрес конструктор пишет в первые 8 байт объекта (раздел П7.6)."],
     ["??2@YAPEAX_K@Z", [C("operator new(unsigned __int64)"),C("operator delete(void *)"),C("конструктор"),C("malloc")], 0, "<code>??2</code> — operator new, <code>??3</code> — operator delete. Аргумент <code>_K</code> — unsigned __int64, размер объекта (раздел П7.4)."],
     ["_ZNK3Dog4nameEv", [C("Dog::name() const — схема g++"),C("Dog::name() — Visual Studio"),C("vtable for Dog"),C("typeinfo name for Dog")], 0, "<code>_Z</code> — имя C++ у g++, <code>N…E</code> — имя с классом, <code>K</code> — const, числа — длины имён, <code>v</code> — без аргументов."],
@@ -2634,7 +2635,7 @@
     ["mov     rax, [rcx]\ncall    qword ptr [rax+8]", ["виртуальный вызов: ячейка 1 таблицы объекта","вызов конструктора","вызов operator new","чтение поля по смещению 8"], 0, "Взяли адрес таблицы из первых 8 байт объекта и вызвали функцию из ячейки 8 / 8 = 1 (раздел П7.6)."],
     ["mov     ecx, 18h\ncall    operator new(unsigned __int64)", ["создаётся объект размером 24 байта","создаётся массив из 18 элементов","освобождается 24 байта","вызывается метод номер 18h"], 0, "Единственный аргумент operator new — размер объекта: 18h = 24 байта (раздел П7.4)."],
     ["lea     rax, Dog::`vftable'\nmov     [rsi], rax", ["конструктор пишет в объект адрес таблицы класса Dog","виртуальный вызов","чтение таблицы","копирование объекта"], 0, "Так конструктор класса с виртуальными функциями отмечает объект своим классом. По этой паре строк конструкторы и находят (раздел П7.4)."],
-    ["test    edx, edx\njz      short skip\nmov     edx, 18h\nmov     rcx, rsi\ncall    operator delete(void *, unsigned __int64)", ["удаляющий деструктор: освободить 24 байта, если во втором аргументе не 0","конструктор","проверка на исключение","цикл по массиву"], 0, "scalar deleting destructor Visual Studio: флаг в EDX говорит, освобождать ли память, а размер объекта передаётся в operator delete (раздел П7.4)."],
+    ["lea     rax, Animal::`vftable'\nmov     rbx, rcx\nmov     [rcx], rax\ntest    dl, 1\njz      short skip\nmov     edx, 18h\ncall    operator delete(void *, unsigned __int64)", ["удаляющий деструктор: освободить 24 байта, если включён бит 0 второго аргумента","конструктор","проверка на исключение","цикл по массиву"], 0, "Удаляющий деструктор Visual Studio: сначала деструктор Animal кладёт в объект таблицу Animal, потом бит 0 в DL решает, освобождать ли память; размер объекта уходит в operator delete (раздел П7.4)."],
     ["lea     rdx, _TI1?AUBadInput@@\nlea     rcx, [rsp+24h]\ncall    _CxxThrowException", ["throw BadInput — бросок исключения (Visual Studio)","catch BadInput — ловля","конструктор BadInput","вызов деструктора"], 0, "_CxxThrowException: в RCX — объект-ошибка, в RDX — описание его типа. Обратно управление не вернётся (раздел П7.9)."],
     ["call    __cxa_allocate_exception\n…\ncall    __cxa_throw", ["throw — бросок исключения у g++","выделение памяти под массив","ловля исключения у g++","вызов деструктора"], 0, "У g++ бросок — две функции: выделить объект-ошибку и бросить (упражнение П7.7)."],
     ["mov     rax, [rcx+8]\nsub     rax, [rcx]\nsar     rax, 2", ["размер std::vector<int>: (конец − начало) / 4","длина std::string","виртуальный вызов","деление на 2"], 0, "Вектор — три указателя; размер не хранится, его вычисляют разностью и сдвигом: sar на 2 — деление на 4, размер int (раздел П7.10)."],

@@ -66,7 +66,7 @@ def main():
                     help='msvcrt — как w64devkit ученика (по умолчанию), ucrt — как сайт godbolt')
     a = ap.parse_args()
     src = open(a.source, encoding='utf-8').read()
-    msvc = a.compiler.startswith('vc_')          # Visual Studio: свои ключи, листинг MASM
+    msvc = a.compiler.startswith(('vc_', 'vcpp_'))   # Visual Studio (C и C++): свои ключи, листинг MASM
     if msvc:
         flags = '/O2' if a.flags == '-O0' else a.flags
     else:
@@ -89,17 +89,21 @@ def main():
                 if not on and re.match(r'\S+\$ = \d+$', t.strip()):
                     offsets.append(t)
                     continue
-                if t.split()[:2] == [a.asm, 'PROC']:
+                # имя C++ искажено (?talk@@YAX…), зато MSVC пишет его расшифровку
+                # в комментарии: «?talk@@… PROC ; talk, COMDAT»
+                if not on and 'PROC' in t.split() and (t.split()[0] == a.asm or
+                        re.search(r';\s*(\S+::)?' + re.escape(a.asm) + r'\b', t)):
                     on = True
                     print('\n'.join(offsets))
                 elif not on:
                     offsets = []
                 if on:
                     print(t)
-                if on and t.split()[:2] == [a.asm, 'ENDP']:
+                if on and 'ENDP' in t.split():
                     break
                 continue
-            if t.rstrip(':').strip('"') == a.asm:
+            label = t.rstrip(':').strip('"')
+            if label == a.asm or label.split('(')[0] == a.asm:   # у C++ после расшифровки — talk(Animal const*)
                 on = True
             elif on and t and not t.startswith((' ', '\t', '.')):
                 break

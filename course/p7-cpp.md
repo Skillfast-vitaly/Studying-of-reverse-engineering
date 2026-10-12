@@ -44,11 +44,11 @@ Detect It Easy пишет «Microsoft Visual C++» — так зовут ком�
 3. **П7.9–П7.13** — исключения, `std::string` и `std::vector`,
    практика в IDA, дорога к гипервизору, что запомнить.
 
-Как я проверял. Visual Studio в облаке нет. Поэтому код в стиле Visual
-Studio я получил компилятором clang в режиме совместимости с ней: он
-повторяет её раскладку объектов, таблицы и имена. Порядок инструкций
-у настоящей Visual Studio может отличаться в мелочах. Код в стиле g++ —
-настоящий, от того же MinGW, что и у тебя в w64devkit. Что печатают
+Как я проверял. Код в стиле Visual Studio — от настоящего компилятора
+Microsoft: `cl` 19.51 из Visual Studio 2026, он работает на сайте
+godbolt.org. Ключи — `/O1 /EHsc`, как в команде из П7.2, а для отладочной
+сборки — `/Od`. Код в стиле g++ — от MinGW g++ 16.2, той же версии, что
+у тебя в w64devkit. Что печатают
 программы, я проверил запуском той же программы, собранной под Linux:
 логика у C++ от системы не зависит.
 
@@ -224,13 +224,12 @@ int Animal_legs(const struct Animal *this) { return this->legs_; }
 
 ```
 Dog::give_bone:
-    push    rax
-    mov     [rsp], rcx              ; сохранить this
-    mov     rax, [rsp]              ; rax = this
-    mov     ecx, [rax+10h]          ; ecx = this->bones_
-    add     ecx, 1
-    mov     [rax+10h], ecx          ; this->bones_ = ecx
-    pop     rax
+    mov     [rsp+8], rcx            ; сохранить this — в теневое пространство (глава 12)
+    mov     rax, [rsp+8]            ; rax = this
+    mov     eax, [rax+10h]          ; eax = this->bones_
+    inc     eax
+    mov     rcx, [rsp+8]
+    mov     [rcx+10h], eax          ; this->bones_ = eax
     retn
 ```
 
@@ -290,21 +289,23 @@ delete zoo[0];
 
 ### Конструктор в листинге
 
-Отладочная сборка (Debug), где ничего не встроено. Конструктор `Dog`:
+Сборка без оптимизации (`cl /Od`), где ничего не встроено. Конструктор
+`Dog`:
 
 ```
 Dog::Dog:
-    sub     rsp, 38h
-    mov     [rsp+30h], rcx
-    mov     rcx, [rsp+30h]
-    mov     [rsp+28h], rcx             ; запомнить this
+    mov     [rsp+8], rcx               ; this — в теневое пространство
+    sub     rsp, 28h
     mov     edx, 4                     ; второй аргумент: 4 ноги
-    call    Animal::Animal             ; первый — this, он уже в RCX
-    mov     rax, [rsp+28h]             ; rax = this
+    mov     rcx, [rsp+30h]             ; первый — this (тот же слот, RSP сдвинулся)
+    call    Animal::Animal
+    mov     rax, [rsp+30h]             ; rax = this
     lea     rcx, Dog::`vftable'
     mov     [rax], rcx                 ; this+0 = адрес таблицы Dog
+    mov     rax, [rsp+30h]
     mov     dword ptr [rax+10h], 0     ; this->bones_ = 0
-    add     rsp, 38h
+    mov     rax, [rsp+30h]             ; вернуть this
+    add     rsp, 28h
     retn
 ```
 
@@ -312,17 +313,28 @@ Dog::Dog:
 
 ```
 Animal::Animal:
-    sub     rsp, 10h
-    mov     [rsp+0Ch], edx             ; legs
-    mov     [rsp], rcx                 ; this
-    mov     rax, [rsp]
+    mov     [rsp+10h], edx             ; legs — в теневое пространство
+    mov     [rsp+8], rcx               ; this
+    mov     rax, [rsp+8]
     lea     rcx, Animal::`vftable'
     mov     [rax], rcx                 ; this+0 = адрес таблицы Animal
-    mov     ecx, [rsp+0Ch]
+    mov     rax, [rsp+8]
+    mov     ecx, [rsp+10h]
     mov     [rax+8], ecx               ; this->legs_ = legs
-    add     rsp, 10h
+    mov     rax, [rsp+8]               ; вернуть this
     retn
 ```
+
+Без оптимизации Visual Studio первым делом складывает аргументы
+в теневое пространство — те 32 байта, что вызывающий выделил под
+четыре регистровых аргумента (главы 11–12). И конструктор у неё
+возвращает `this` в `RAX`, хотя в C++ он ничего не возвращает.
+
+> В конфигурации **Debug** проекта Visual Studio в начале функций будут
+> ещё служебные строки: вызов `__CheckForDebuggerJustMyCode` (ключ
+> `/JMC`, включён в шаблонах проектов с Visual Studio 2017 версии 15.8 —
+> документация Microsoft) и проверки стека. Это не твой код,
+> пропускай их.
 
 Видишь порядок? Сначала конструктор `Animal` пишет в первые 8 байт
 объекта адрес таблицы `Animal` и ставит ноги по смещению `8`. Потом
@@ -341,23 +353,32 @@ main:
     …
     mov     ecx, 18h                   ; размер Dog — 24 байта
     call    operator new(unsigned __int64)
-    mov     rsi, rax                   ; rsi = новый объект
+    mov     [rsp+40h], rax
+    mov     rbx, rax                   ; rbx = новый объект
+    test    rax, rax                   ; new вернул ноль?
+    jz      short no_dog
     mov     dword ptr [rax+8], 4       ; legs_ = 4
     lea     rax, Dog::`vftable'
-    mov     [rsi], rax                 ; таблица Dog
-    mov     dword ptr [rsi+10h], 0     ; bones_ = 0
-    mov     [rsp+20h], rsi             ; zoo[0]
+    mov     [rbx], rax                 ; таблица Dog
+    mov     dword ptr [rbx+10h], 0     ; bones_ = 0
+    jmp     short dog_done
+no_dog:
+    xor     ebx, ebx                   ; объекта нет — ноль
+dog_done:
     mov     ecx, 10h                   ; размер Bird — 16 байт
+    mov     [rsp+20h], rbx             ; zoo[0]
     call    operator new(unsigned __int64)
-    mov     rdi, rax
-    mov     dword ptr [rax+8], 2       ; legs_ = 2
-    lea     rax, Bird::`vftable'
-    mov     [rdi], rax                 ; таблица Bird
-    mov     [rsp+28h], rdi             ; zoo[1]
+    …                                  ; то же для Bird: rdi, legs_ = 2
 ```
 
 Конструкторы встроились: вызовов `Dog::Dog` больше нет, остались их
-три записи. Зато `operator new` всегда остаётся вызовом, и его
+три записи. А вокруг них — проверка `test rax, rax`: если `new` вернул
+ноль, конструктор пропускается. Стандартный `operator new` при нехватке
+памяти не возвращает ноль, а бросает исключение, но Visual Studio
+по умолчанию осторожничает: вдруг в программу подключён старый `new`,
+который возвращает ноль (ключ `/Zc:throwingNew-`, документация
+Microsoft). В сборке Release из проекта Visual Studio с оптимизацией
+всей программы (`/GL`) эти проверки обычно исчезают. Зато `operator new` всегда остаётся вызовом, и его
 единственный аргумент в `ECX` — **размер объекта**. Это подарок
 реверсеру: увидел `mov ecx, 18h` перед `operator new` — знаешь, что
 объект этого класса занимает 24 байта, и можешь заводить структуру
@@ -368,39 +389,62 @@ main:
 Конец `main`:
 
 ```
-    mov     rax, [rsi]                 ; таблица объекта zoo[0]
-    mov     rcx, rsi                   ; this
+    mov     rax, [rbx]                 ; таблица объекта zoo[0]
     mov     edx, 1                     ; «и освободи память»
+    mov     rcx, rbx                   ; this
     call    qword ptr [rax]            ; первая ячейка таблицы
+    test    rdi, rdi                   ; zoo[1] не ноль?
+    jz      short done
+    mov     rax, [rdi]                 ; то же для zoo[1]
+    mov     edx, 1
+    mov     rcx, rdi
+    call    qword ptr [rax]
 ```
 
 `delete` вызвал **первую функцию из таблицы объекта**. Visual Studio
-кладёт туда особую функцию — **scalar deleting destructor**
-`[скéйлер дилúтинг дистрáктор]`, «удаляющий деструктор». Она вызывает
-деструктор, а если во втором аргументе 1 — ещё и освобождает память:
+кладёт туда особую функцию — **удаляющий деструктор** (deleting
+destructor `[дилúтинг дистрáктор]`). Она вызывает деструктор, а если
+во втором аргументе включён бит 0 — ещё и освобождает память.
+(Проверка `test rdi, rdi` — потому что `delete` нулевого указателя
+по правилам C++ ничего не делает. Для `zoo[0]` её нет: к этому
+объекту компилятор уже обращался в `feed` и знает, что он не ноль.)
 
 ```
-Dog::`scalar deleting dtor':
-    push    rsi
+Dog::`scalar deleting destructor':
+    push    rbx
     sub     rsp, 20h
-    mov     rsi, rcx                   ; this
-    test    edx, edx                   ; освобождать?
+    lea     rax, Animal::`vftable'
+    mov     rbx, rcx                   ; rbx = this
+    mov     [rcx], rax                 ; this+0 = таблица Animal!
+    test    dl, 1                      ; бит 0: освобождать?
     jz      short skip
     mov     edx, 18h                   ; размер — опять 24 байта
-    mov     rcx, rsi
     call    operator delete(void *, unsigned __int64)
 skip:
-    mov     rax, rsi
+    mov     rax, rbx
     add     rsp, 20h
-    pop     rsi
+    pop     rbx
     retn
 ```
 
-Деструктор у нас пустой, и компилятор его выбросил: осталось только
-освобождение. Обрати внимание на `mov edx, 18h`: Visual Studio
+Деструкторы у нас пустые, но одна строка от них осталась: в объект
+пишется адрес таблицы **`Animal`**. Это деструктор `Animal`: пока он
+работает, объект уже не собака, а просто животное. Зеркало
+конструкторов: там таблицы ставились от базового класса к наследнику,
+здесь — обратно. Обрати внимание и на `mov edx, 18h`: Visual Studio
 по умолчанию передаёт в `operator delete` и размер объекта (так написано
 в документации Microsoft про ключ `/Zc:sizedDealloc`). Размер класса
 виден дважды — у `new` и у `delete`.
+
+Два имени для одной ячейки. В таблице класса Visual Studio ссылается
+на **vector deleting destructor** (`??_E…`) — удаляющий деструктор,
+который умеет удалять и массивы объектов (`new Dog[10]`). Если массивов
+таких объектов в программе нет, компилятор делает только **scalar
+deleting destructor** (`??_G…`), и компоновщик ставит его на это место
+(проверено компилятором: с `delete[]` в программе появляется тело
+`??_E`, без него — только `??_G`). Поэтому в чужих программах ячейка 0
+бывает подписана и так и так; работа одна, разница — в бите 1
+второго аргумента: «удалить массив».
 
 ## П7.5. Наследование и раскладка объекта
 
@@ -502,7 +546,7 @@ void talk(const Animal *a)
 
 ```
                Animal::`vftable'      Dog::`vftable'       Bird::`vftable'
-ячейка 0, +00  Animal::scalar del.    Dog::scalar del.     Bird::scalar del.
+ячейка 0, +00  Animal::deleting dtor  Dog::deleting dtor   Bird::deleting dtor
 ячейка 1, +08  Animal::name           Dog::name            Bird::name
 ячейка 2, +10  Animal::speak          Dog::speak           Animal::speak
 ```
@@ -519,17 +563,17 @@ void talk(const Animal *a)
 
 ```
 talk:
-    push    rsi
+    push    rbx
     sub     rsp, 20h
-    mov     rsi, rcx                   ; rsi = a
     mov     rax, [rcx]                 ; rax = адрес таблицы из объекта
+    mov     rbx, rcx                   ; rbx = a
     call    qword ptr [rax+8]          ; ячейка 1 — name()
     mov     rcx, rax
-    call    puts
-    mov     rax, [rsi]                 ; снова таблица
-    mov     rcx, rsi                   ; this = a
+    call    cs:__imp_puts              ; puts — через таблицу импорта (глава 12)
+    mov     rax, [rbx]                 ; снова таблица
+    mov     rcx, rbx                   ; this = a
     add     rsp, 20h
-    pop     rsi
+    pop     rbx
     jmp     qword ptr [rax+10h]        ; ячейка 2 — speak()
 ```
 
@@ -596,6 +640,7 @@ Microsoft в своей документации зовёт такие имен�
 | `?count_legs@@YAHPEAPEAVAnimal@@H@Z` | `int count_legs(class Animal **, int)` |
 | `??0Dog@@QEAA@XZ` | `public: Dog::Dog(void)` — конструктор |
 | `??_GDog@@UEAAPEAXI@Z` | `public: virtual void * Dog::'scalar deleting dtor'(unsigned int)` — удаляющий деструктор |
+| `??_EDog@@UEAAPEAXI@Z` | `public: virtual void * Dog::'vector deleting dtor'(unsigned int)` — он же, умеющий удалять массивы |
 | `??_7Dog@@6B@` | `const Dog::'vftable'` — таблица |
 | `??2@YAPEAX_K@Z` | `void * operator new(unsigned __int64)` |
 | `??3@YAXPEAX_K@Z` | `void operator delete(void *, unsigned __int64)` |
@@ -610,8 +655,8 @@ Microsoft в своей документации зовёт такие имен�
 
 - `?` в начале — имя C++. Дальше имена **задом наперёд** до `@@`:
   `name@Dog@@` — это `Dog::name`;
-- `??0` — конструктор, `??1` — деструктор, `??_G` — удаляющий
-  деструктор, `??_7` — таблица виртуальных функций, `??2` и `??3` —
+- `??0` — конструктор, `??1` — деструктор, `??_G` и `??_E` — удаляющие
+  деструкторы, `??_7` — таблица виртуальных функций, `??2` и `??3` —
   `operator new` и `operator delete`;
 - после `@@`: `Q` — обычный открытый метод, `U` — открытый
   **виртуальный** метод, `Y` — функция вне класса;
@@ -758,14 +803,13 @@ parse:
     sub     rsp, 28h
     test    ecx, ecx
     js      short throw_it             ; x < 0? (знак — глава 9)
-    add     ecx, ecx                   ; x * 2
-    mov     eax, ecx
+    lea     eax, [rcx+rcx]             ; x * 2 (lea как арифметика — глава 10)
     add     rsp, 28h
     retn
 throw_it:
-    mov     [rsp+24h], ecx             ; объект BadInput{x} на стеке
+    mov     [rsp+30h], ecx             ; объект BadInput{x} на стеке
     lea     rdx, _TI1?AUBadInput@@     ; «паспорт» типа исключения
-    lea     rcx, [rsp+24h]             ; адрес объекта
+    lea     rcx, [rsp+30h]             ; адрес объекта
     call    _CxxThrowException
     int     3                          ; сюда управление не вернётся
 ```
@@ -790,8 +834,9 @@ throw_it:
 C++ — **обработчик кадра** (frame handler). В программах из Visual
 Studio 2019 и новее это `__CxxFrameHandler4` из файла
 `VCRUNTIME140_1.dll` (так в блоге команды C++ Microsoft: новый формат
-таблиц стал примерно на 60% меньше). У clang в облаке —
-`__CxxFrameHandler3`, старый формат.
+таблиц стал примерно на 60% меньше; `cl` 19.51 для `exc.cpp` ставит
+именно его). В старых программах встретишь `__CxxFrameHandler3` —
+прежний формат.
 
 Для реверсера отсюда простое правило. Видишь в импортах
 `_CxxThrowException` и `__CxxFrameHandler4` — программа на C++

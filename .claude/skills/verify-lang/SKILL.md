@@ -27,6 +27,20 @@ bash .claude/skills/verify-lang/scripts/build_lang.sh пример.py  --run "в
 виртуальных функций (`??_7Dog@@6B@` = `Dog::vftable`) и деструкторы
 (`scalar deleting dtor`). Именно это ученик увидит в IDA.
 
+**Сначала — настоящий `cl` на godbolt** (с 12.10.2026, проверено):
+`python3 .claude/skills/verify-example/scripts/godbolt_mingw.py пример.cpp
+--compiler vcpp_v19_51_VS18_6_x64 "--flags=/O1 /EHsc" --asm имя` —
+C++-компиляторы godbolt зовутся `vcpp_…` (у C — `vc_…`), заголовки STL
+Microsoft там настоящие (размеры `std::string` 32/40 и `std::vector`
+24/32 проверены `static_assert`). Листинг MASM: смещения именами
+(`this$ = 8`), в главу — числами, как в IDA. Чем `cl` отличается от
+clang в режиме MSVC (найдено на П7): в таблицу пишется `??_E`
+(vector deleting dtor), а тело — `??_G`, если массивов нет; после
+`operator new` — проверка на ноль (`/Zc:throwingNew-` по умолчанию);
+в `/Od` аргументы складываются в теневое пространство `[rsp+8]`;
+удаляющий деструктор проверяет `test dl, 1`. clang ниже — запасной
+путь, когда godbolt недоступен.
+
 - Скрипт собирает объектный файл через `clang --target=x86_64-pc-windows-msvc`.
   Clang совместим с MSVC по ABI: имена, раскладка классов, vtable
   и соглашение о вызовах те же. Порядок и выбор инструкций может
