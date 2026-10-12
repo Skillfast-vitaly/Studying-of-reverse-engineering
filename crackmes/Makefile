@@ -20,7 +20,7 @@ CFLAGS  := -O0 -Wall -Wextra
 BUILD   := build
 SRC     := src
 
-NAMES   := 01_strings 02_xor 03_serial 05_vm
+NAMES   := 01_strings 02_xor 03_serial 05_vm 07_format
 NET     := 06_proto_server 06_proto_client
 TARGETS := $(addprefix $(BUILD)/,$(addsuffix .exe,$(NAMES) $(NET)))
 
@@ -62,6 +62,7 @@ test: all
 	@printf 'xor_hides_nothing\n' | ./$(BUILD)/02_xor.exe     | tail -1
 	@printf 'RE-6685000-I\n'      | ./$(BUILD)/03_serial.exe  | tail -1
 	@printf 'vm_obfuscation\n'    | ./$(BUILD)/05_vm.exe      | tail -1
+	@rm -f rekordy.dat; ./$(BUILD)/07_format.exe add Test 42 >/dev/null; ./$(BUILD)/07_format.exe list; rm -f rekordy.dat
 
 clean:
 	rm -rf $(BUILD)

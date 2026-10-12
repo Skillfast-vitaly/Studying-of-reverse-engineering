@@ -5155,6 +5155,10 @@ Python 3.13, biblioteka python313.dll
 и подпишет строку. А то, что расшифровка вышла непечатной, — уже
 повод проверить ключ.
 
+### П6.8. Задача 07
+
+Разбор по шагам — в разделе «Задача 07» в конце этого файла.
+
 ## Приложение П7. C++: язык и дизассемблер
 
 ### П7.1. Раскладка двух классов
@@ -5916,3 +5920,116 @@ int main(int argc, char **argv)
 у `.data` у неё 0x1400.
 
 </details>
+
+---
+
+## Задача 07. Формат файла без описания
+
+Сначала попробуй сам. Ниже — ход поиска по шагам.
+
+<details>
+<summary>Шаг 1 — байты файла</summary>
+
+Три записи (Vitaly 1500, Anna 2300, Bot 7) дают такой файл:
+
+```
+00000000  52 4B 44 31 01 00 03 00  06 56 69 74 61 6C 79 DC  RKD1.....Vitaly.
+00000010  05 00 00 04 41 6E 6E 61  FC 08 00 00 03 42 6F 74  ....Anna.....Bot
+00000020  07 00 00 00 D3 03 EC EB                           ........
+```
+
+- `RKD1` — подпись формата, как `MZ` у программ (глава 8);
+- `01 00` — число 1 младшим байтом вперёд: похоже на версию;
+- `03 00` — 3: ровно столько записей;
+- `06 Vitaly DC 05 00 00` — длина имени (6), имя без нуля в конце,
+  очки: `0x05DC` = 1500. Так же `04 Anna FC 08 00 00` (2300)
+  и `03 Bot 07 00 00 00` (7);
+- `D3 03 EC EB` — последние 4 байта. Их значение меняется от любой
+  правки — это контрольная сумма.
+
+Догадку проверяй, как в П9.9: добавь запись и посмотри, что изменилось.
+
+</details>
+
+<details>
+<summary>Шаг 2 — формула в коде</summary>
+
+Строка `Fajl rekordy.dat isporchen` → перекрёстная ссылка (глава 16) →
+функция чтения файла. Перед сообщением — сравнение четырёх последних
+байтов с результатом другой функции. В ней — цикл по всем байтам,
+кроме последних четырёх. В отладочной сборке его сердце:
+
+```
+        mov     eax, edx           ; eax = h
+        sal     eax, 5             ; h × 32
+        sub     eax, edx           ; h × 32 − h = h × 31
+        …
+        movzx   eax, BYTE PTR [rax]  ; очередной байт
+        add     eax, ecx           ; h × 31 + байт
+```
+
+Числа 31 в коде нет: компилятор заменил умножение сдвигом и вычитанием.
+Это тот же приём, что деление через умножение в главе 18.5. Формула:
+`h = h × 31 + байт`, начиная с `h = 0`, только младшие 32 бита. В тяжёлой
+сборке эта функция встроена прямо в чтение и запись файла, но цикл
+и `sal … 5` / `sub` узнаются так же.
+
+</details>
+
+<details>
+<summary>Шаг 3 — своя читалка и писалка</summary>
+
+```python
+# rekordy.py — своя читалка и писалка формата задачи 07
+import struct
+import sys
+
+def checksum(data):
+    h = 0
+    for b in data:
+        h = (h * 31 + b) & 0xFFFFFFFF          # 32 бита, как uint32_t в C
+    return h
+
+def read(path):
+    data = open(path, 'rb').read()
+    if data[:4] != b'RKD1':
+        sys.exit('ne tot fajl')
+    version, count = struct.unpack_from('<HH', data, 4)
+    if checksum(data[:-4]) != struct.unpack_from('<I', data, len(data) - 4)[0]:
+        sys.exit('kontrolnaya summa ne shoditsya')
+    pos, table = 8, []
+    for _ in range(count):
+        n = data[pos]
+        name = data[pos + 1:pos + 1 + n].decode('ascii')
+        score = struct.unpack_from('<I', data, pos + 1 + n)[0]
+        table.append((name, score))
+        pos += 1 + n + 4
+    return table
+
+def write(path, table):
+    body = b'RKD1' + struct.pack('<HH', 1, len(table))
+    for name, score in table:
+        raw = name.encode('ascii')
+        body += bytes([len(raw)]) + raw + struct.pack('<I', score)
+    open(path, 'wb').write(body + struct.pack('<I', checksum(body)))
+
+table = read('rekordy.dat')
+for i, (name, score) in enumerate(table, 1):
+    print(i, name, score)
+table.append(('Brat', 999999))
+write('rekordy.dat', table)
+print('dobavil, zapisej:', len(table))
+```
+
+Как я проверял: программа задачи записала три записи, скрипт прочитал
+их, добавил `Brat 999999`, и `07_format.exe list` показала четыре
+записи. Сумма исходного файла — `0xEBEC03D3`, в файле — `D3 03 EC EB`.
+
+`& 0xFFFFFFFF` нужен потому, что в Python числа не переполняются
+(П6.3), а в C `uint32_t` теряет всё выше 32 бит.
+
+</details>
+
+Решил — оформи разбор (скилл `writeup`): формат файла с таблицей полей,
+формула суммы и твой скрипт. Это хорошая строчка портфолио: «восстановил
+формат файла и контрольную сумму по машинному коду».
