@@ -44,6 +44,23 @@ for n, line in enumerate(gloss.splitlines(), 1):
     entries[norm(terms[0])].append((n, section, tail.strip()))   # главное написание записи
     known.update(norm(t) for t in terms)                          # все написания — «уже есть»
 
+# слова из таблицы «Слова из интерфейса инструментов»: | Undo | `[андý]` | Отменить |
+for line in gloss.splitlines():
+    m = re.match(r"\|\s*([A-Za-z][^|]*?)\s*\|\s*`\[", line)
+    if m:
+        known.add(norm(m.group(1)))
+
+def is_known(t):
+    """Есть ли термин в словаре — с поправкой на множественное число
+    («writeups» при записи «writeup») и на «Process IDentifier» при записи
+    «PID (Process IDentifier)»."""
+    if t in known:
+        return True
+    for v in (t[:-1] if t.endswith("s") else None, t[:-2] if t.endswith("es") else None):
+        if v and v in known:
+            return True
+    return any(t in k for k in known if len(t) > 6)
+
 conflicts = 0
 dups = {t: v for t, v in entries.items() if len(v) > 1}
 print(f"Записей в словаре: {sum(len(v) for v in entries.values())}, написаний терминов: {len(known)}")
@@ -67,7 +84,7 @@ for f in sorted((ROOT / "course").glob("*.md")):
     text = re.sub(r"```.*?```", "", f.read_text(encoding="utf-8"), flags=re.S)
     for m in INTRO.finditer(text):
         t = norm(m.group(1))
-        if len(t) < 2 or t in known or t in missing:
+        if len(t) < 2 or is_known(t) or t in missing:
             continue
         missing[t] = f.name
 if missing:
