@@ -432,6 +432,23 @@
   </details>
 
   <details class="cheat">
+    <summary>Шпаргалка к приложению П8 — Rust</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>в листинге</th><th>что это</th></tr>
+        <tr><td>RCX, RDX у функции со срезом</td><td class="t">адрес и длина: &amp;[T] или &amp;str</td></tr>
+        <tr><td>cmp rdx, N / jb → panic_bounds_check / ud2</td><td class="t">проверка границ перед v[N − 1]</td></tr>
+        <tr><td>[rcx], [rcx+8], [rcx+16] у Vec, String</td><td class="t">rustc 1.99: вместимость, адрес, длина — порядок не обещан</td></tr>
+        <tr><td>xor eax, eax вместо адреса</td><td class="t">None у Option&lt;&amp;T&gt;</td></tr>
+        <tr><td>cmp ecx, 1 / jne → unwrap_failed</td><td class="t">unwrap у Option&lt;u32&gt;</td></tr>
+        <tr><td>cmp / jb → panic_const_add_overflow</td><td class="t">отладочная сборка</td></tr>
+        <tr><td>pcmpeqb xmm0, [__xmm@…]</td><td class="t">сравнение 16 байт: константа младшим байтом вперёд</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Имена: <code>_ZN7krate3mod4func17h…E</code> — до Rust 1.97, <code>_R…</code> (v0) — с 1.97; числа перед словами — длины. Служебный <code>main</code> → <code>std::rt::lang_start</code> → твой <code>main</code>. Строки без нуля, лежат вплотную. <code>/rustc/</code> + 40 цифр — хеш компилятора, сверить с <code>rustc -vV</code>. 133, 5760, 12288 — пробелы Unicode, <code>trim</code>. Правила главы 12 — для <code>extern "C"</code>, свои функции Rust вызывает по своим.</p>
+    </div>
+  </details>
+
+  <details class="cheat">
     <summary>Шпаргалка к приложению П9 — сеть</summary>
     <div class="cheat-body">
       <table>
@@ -447,7 +464,7 @@
   </details>
 
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П7, П9.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П9.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -2629,6 +2646,130 @@
     }
   };
 
+  /* ── приложение П8: Rust в дизассемблере ── */
+
+  function uniq8(a){ return a.filter(function(v,i,s){ return s.indexOf(v) === i; }); }
+  var ELEM8 = [["u8",1], ["u16",2], ["u32",4], ["u64",8]];
+
+  MODES.idx8 = {
+    label:"Срез и номер",
+    make:function(){
+      var t = pick(ELEM8), idx = ri(1, 9), off = idx * t[1];
+      if(Math.random() < 0.5){
+        var opts = uniq8([idx, off, idx + 1, idx - 1].map(String));
+        fill4(opts, function(s){ return String(idx + 1 + s); });
+        var all = shuffle(opts);
+        return { prompt:"Срез &["+t[0]+"]: адрес в RCX, длина в RDX. Какой номер элемента читает код?", kind:"code",
+          value:"mov …, [rcx + "+off+"]", options:all.map(C), answer:all.indexOf(String(idx)),
+          why:t[0]+" занимает "+t[1]+" байт. Номер = смещение ÷ размер: "+off+" ÷ "+t[1]+" = "+idx+" (счёт с нуля, глава 4; П8.5)." };
+      }
+      var right = "cmp rdx, "+(idx + 1);
+      var opts2 = uniq8([right, "cmp rdx, "+idx, "cmp rdx, "+off, "cmp rcx, "+(idx + 1)]);
+      fill4(opts2, function(s){ return "cmp rdx, "+(idx + 1 + s); });
+      var all2 = shuffle(opts2);
+      return { prompt:"Перед чтением элемента Rust проверяет длину. С чем сравнит?", kind:"code",
+        value:"v["+idx+"]   // v: &["+t[0]+"]", options:all2.map(C), answer:all2.indexOf(right),
+        why:"Элемент номер "+idx+" есть, только если длина не меньше "+(idx + 1)+": <code>cmp rdx, "+(idx + 1)+"</code> / <code>jb</code> к <code>panic_bounds_check</code>. Длина — в RDX, адрес — в RCX (П8.5)." };
+    }
+  };
+
+  var VEC8 = [
+    ["mov rax, qword ptr [rcx]   — в RCX адрес Vec, rustc 1.99", ["вместимость (capacity)", "адрес элементов", "длина (len)", "первый элемент"], 0,
+     "У rustc 1.99 поля Vec: вместимость +0, адрес +8, длина +16 (П8.6). Порядок Rust не обещает — для другой версии проверяй по коду."],
+    ["mov rax, qword ptr [rcx + 8]   — в RCX адрес Vec, rustc 1.99", ["адрес элементов", "вместимость (capacity)", "длина (len)", "второй элемент"], 0,
+     "Поле +8 у rustc 1.99 — адрес, где в куче лежат сами элементы (П8.6)."],
+    ["mov rax, qword ptr [rcx + 16]   — в RCX адрес String, rustc 1.99", ["длина (len)", "вместимость (capacity)", "адрес букв", "третья буква"], 0,
+     "String — это Vec байтов, поля те же: длина на +16 (П8.6)."],
+    ["Сколько байт занимает &str?", ["16: адрес и длина", "8: только адрес", "24: как String", "зависит от длины текста"], 0,
+     "&str — срез: адрес и длина по 8 байт. В аргументах — два регистра (П8.5, П8.6)."],
+    ["Сколько байт занимает String у rustc 1.99?", ["24", "16", "8", "32"], 0,
+     "Три поля по 8 байт: вместимость, адрес, длина (П8.6)."],
+    ["Почему окно строк показывает тексты программы на Rust слипшимися?", ["у строк Rust нет нуля в конце", "Rust шифрует строки", "строки лежат в куче", "IDA не знает Rust"], 0,
+     "Длина хранится отдельно, ноль в конце не нужен: <code>.ascii</code>, а не <code>.asciz</code> (П8.5)."],
+    ["Функция вернула &str. Где адрес и где длина?", ["RAX — адрес, RDX — длина", "RAX — длина, RDX — адрес", "только RAX", "на стеке"], 0,
+     "Пару Rust возвращает в двух регистрах: <code>lea rax, […]</code> / <code>mov edx, 6</code> (П8.5)."]
+  ];
+  MODES.vec8 = { label:"Vec, String, &str", make:function(){ return qa(VEC8, "Что это в памяти?", "text"); } };
+
+  var OPT8 = [
+    ["Функция возвращает Option<&u32>, в EAX 0. Что это?", ["None", "Some(0)", "ошибка", "паника"], 0,
+     "Ссылка не бывает нулём, поэтому None — это 0: ниша (П8.7)."],
+    ["Option<u32> пришёл аргументом. Где метка Some/None?", ["в ECX, значение — в EDX", "в старшем бите EAX", "в глобальной переменной", "метки нет"], 0,
+     "У u32 свободного значения нет, поэтому есть метка: 1 — Some, 0 — None. Внутреннее соглашение Rust положило её в ECX, значение — в EDX (П8.7)."],
+    ["Что сделает .unwrap() на None?", ["вызовет core::option::unwrap_failed — паника", "вернёт 0", "вернёт -1", "ничего не сделает"], 0,
+     "unwrap — «дай значение или паникуй» (П8.7)."],
+    ["После call core::panicking::panic_bounds_check стоит ud2. Зачем?", ["пометка «сюда не дойдём»: паника не возвращается", "вторая проверка границ", "возврат из функции", "вызов отладчика"], 0,
+     "ud2 всегда вызывает #UD (вектор 6, глава 34). Компилятор ставит её после вызовов без возврата (П8.5)."],
+    ["Много cmp/jb с вызовами panic_const_add_overflow. Что за сборка?", ["отладочная", "релизная", "со снятыми именами", "упакованная"], 0,
+     "Проверки переполнения есть только в отладочной сборке; в релизной сложение — одна инструкция (П8.11)."],
+    ["Строка /rustc/ и 40 hex-цифр. Что она даёт?", ["версию компилятора: это хеш изменения rustc", "адрес main", "пароль", "ключ шифра"], 0,
+     "Хеш в путях стандартной библиотеки совпадает с commit-hash из rustc -vV (П8.8)."],
+    ["Кому служебный main передаёт адрес твоего main?", ["std::rt::lang_start", "WinMain", "ExitProcess", "panic_bounds_check"], 0,
+     "Цепочка: стартовый код C → служебный main → lang_start → твой main (П8.10)."],
+    ["Сравнения с 133, 5760 и 12288 рядом с вводом. Что это?", ["trim: пробельные символы Unicode", "проверка пароля", "размеры буферов", "коды ошибок"], 0,
+     "U+0085, U+1680, U+3000 — пробелы Unicode, их убирает trim() (П8.11)."]
+  ];
+  MODES.opt8 = { label:"Option и паники", make:function(){ return qa(OPT8, "Rust в машинном коде", "text"); } };
+
+  var CRATES8 = ["zadacha", "server", "zamok", "kopilka", "proxy"];
+  var MODS8 = ["key", "net", "proto", "util", "store"];
+  var FNS8 = ["check", "parse", "send", "read", "open"];
+  function ln8(s){ return s.length + s; }
+  MODES.name8 = {
+    label:"Имена Rust",
+    make:function(){
+      var c = pick(CRATES8), m = pick(MODS8), f = pick(FNS8), v0 = Math.random() < 0.5;
+      var h = ""; for(var i = 0; i < 16; i++) h += "0123456789abcdef"[ri(0, 15)];
+      var name = v0 ? "_RNvNtCsa1B2c3_"+ln8(c)+ln8(m)+ln8(f) : "_ZN"+ln8(c)+ln8(m)+ln8(f)+"17h"+h+"E";
+      var right = c+"::"+m+"::"+f;
+      var opts = uniq8([right, f+"::"+m+"::"+c, m+"::"+c+"::"+f, c+"::"+f]);
+      fill4(opts, function(s){ return c+"::"+m+s+"::"+f; });
+      var all = shuffle(opts);
+      return { prompt:"Чья это функция?", kind:"code", value:name, options:all.map(C), answer:all.indexOf(right),
+        why:(v0 ? "Новый вид v0 (_R…, с Rust 1.97): Nv — функция, Nt — модуль, Cs…_ — отпечаток программы. "
+                : "Старый вид: _ZN … E, хвост 17h и 16 цифр — хеш, его не читают. ")+
+            "Числа перед словами — длины: "+ln8(c)+", "+ln8(m)+", "+ln8(f)+" → <code>"+right+"</code> (П8.9)." };
+    }
+  };
+
+  var PW8 = ["rust_ne_strashen", "sezam_otkroysya!", "parol_123456789!", "kluch_ot_dveri_7",
+             "privet_reverser!", "admin_admin_2026", "otkroy_mne_dver!"];
+  MODES.xmm8 = {
+    label:"Константа __xmm",
+    make:function(){
+      var pw = pick(PW8), hexs = "", bytes = [];
+      for(var i = 15; i >= 0; i--) hexs += hex(pw.charCodeAt(i), 2).toLowerCase();
+      for(var j = 0; j < 16; j++) bytes.push(hex(pw.charCodeAt(j), 2).toLowerCase());
+      var rev = pw.split("").reverse().join("");
+      var opts = uniq8([pw, rev, pw.slice(8)+pw.slice(0, 8), pw.toUpperCase()]);
+      fill4(opts, function(s){ return pw.slice(s % 16)+pw.slice(0, s % 16); });
+      var all = shuffle(opts);
+      return { prompt:"Константа из релизной сборки (сравнение pcmpeqb). Какие 16 букв она хранит?", kind:"code",
+        value:"__xmm@"+hexs, options:all.map(C), answer:all.indexOf(pw),
+        why:"Имя хранит 16 байт одним числом, старший байт первым. В памяти они лежат младшим вперёд (глава 3.7): читаем пары цифр с конца — "+
+            bytes.join(" ")+" → <code>"+pw+"</code> (П8.11). Вариант задом наперёд — это если забыть про порядок байтов." };
+    }
+  };
+
+  var TERMS8 = [
+    ["panic", "паника", "пэ́ник"], ["slice", "срез", "слайс"], ["bounds check", "проверка границ", "бáундз чек"],
+    ["ownership", "владение", "óунершип"], ["borrowing", "заимствование", "бóрроуинг"], ["unwrap", "распаковать", "ан-рэ́п"],
+    ["niche", "ниша", "ниш"], ["capacity", "вместимость", "кэпэ́сити"], ["mangling", "искажение имён", "мэ́нглинг"],
+    ["crate", "ящик: программа или библиотека Rust", "крейт"], ["release build", "релизная сборка", "рилúз билд"],
+    ["debug build", "отладочная сборка", "дибáг билд"]
+  ];
+  MODES.terms8 = {
+    label:"Слова Rust",
+    make:function(){
+      var it = pick(TERMS8);
+      var others = shuffle(TERMS8.filter(function(t){ return t !== it; })).slice(0, 3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «Rust (приложение П8)»." };
+    }
+  };
+
   /* ── приложение П9: разбор сетевого трафика ── */
 
   function hx9(n){ return hex(n & 0xFF, 2).toLowerCase(); }     /* байт строчными, как в Wireshark */
@@ -3084,6 +3225,7 @@
     { id:"gp5",  ch:"П5",    title:"приложение: IDA Pro 9.2", modes:["keysp5","hexp5","synp5","namesp5","xrefp5"], mix:"mixp5" },
     { id:"gp6",  ch:"П6",    title:"приложение: Python для реверсера", modes:["pyout6","bytes6","struct6","c2py6","api6","terms6"], mix:"mixp6" },
     { id:"gp7",  ch:"П7",    title:"приложение: C++ в дизассемблере", modes:["layout7","slot7","mangle7","sign7","str7","terms7"], mix:"mixp7" },
+    { id:"gp8",  ch:"П8",    title:"приложение: Rust в дизассемблере", modes:["idx8","vec8","opt8","name8","xmm8","terms8"], mix:"mixp8" },
     { id:"gp9",  ch:"П9",    title:"приложение: разбор сетевого трафика", modes:["order9","seq9","frame9","flags9","filt9","terms9"], mix:"mixp9" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
