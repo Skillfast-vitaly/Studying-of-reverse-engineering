@@ -10,6 +10,14 @@ Compiler Explorer (godbolt.org) — без установки компилято
     python3 godbolt_mingw.py пример.c "--flags=-O2 -s"              # флаги через =, иначе
                                                                     # argparse примет -O2 за свой ключ
     python3 godbolt_mingw.py пример.c --compiler cmingw64_ucrt_gcc_1520
+    python3 godbolt_mingw.py пример.c --crt ucrt                   # как на сайте godbolt
+    python3 godbolt_mingw.py пример.c --compiler vc_v19_latest_x64 --flags=/O2 --asm vuln
+                                                                    # настоящий Visual Studio
+
+Режим библиотеки. godbolt собран с UCRT, а w64devkit ученика — с msvcrt-os.
+По умолчанию (--crt msvcrt) скрипт добавляет -D__MSVCRT_VERSION__=0x700,
+и заголовки MinGW ведут себя как у ученика: printf в листинге зовётся
+__mingw_printf. --crt ucrt — как на самом сайте godbolt (глава 5).
 
 Что умеет: компиляция с заголовками Windows (windows.h, winsock2.h),
 предупреждения -Wall -Wextra, ассемблер в синтаксисе Intel — тот самый,
@@ -23,6 +31,7 @@ Compiler Explorer (godbolt.org) — без установки компилято
 """
 import argparse
 import json
+import re
 import subprocess
 import sys
 import urllib.request
@@ -53,9 +62,17 @@ def main():
     ap.add_argument('--compiler', default='cmingw64_ucrt_gcc_1620')
     ap.add_argument('--flags', default='-O0')
     ap.add_argument('--asm', metavar='ФУНКЦИЯ', help='показать ассемблер этой функции')
+    ap.add_argument('--crt', choices=['msvcrt', 'ucrt'], default='msvcrt',
+                    help='msvcrt — как w64devkit ученика (по умолчанию), ucrt — как сайт godbolt')
     a = ap.parse_args()
     src = open(a.source, encoding='utf-8').read()
-    flags = '-Wall -Wextra -masm=intel ' + a.flags
+    msvc = a.compiler.startswith('vc_')          # Visual Studio: свои ключи, листинг MASM
+    if msvc:
+        flags = '/O2' if a.flags == '-O0' else a.flags
+    else:
+        flags = '-Wall -Wextra -masm=intel ' + a.flags
+        if a.crt == 'msvcrt':
+            flags += ' -D__MSVCRT_VERSION__=0x700'
     d = post(API % a.compiler, {'source': src, 'options': {'userArguments': flags,
              'filters': {'intel': True, 'labels': True, 'directives': True,
                          'commentOnly': True, 'demangle': True, 'libraryCode': True}}})
@@ -65,8 +82,23 @@ def main():
     print('код возврата компилятора: %s' % d.get('code'))
     if a.asm:
         on = False
+        offsets = []                               # у MSVC перед PROC: «buf$ = 32»
         for line in d.get('asm', []):
             t = line.get('text', '')
+            if msvc:                               # «имя PROC» … «имя ENDP»
+                if not on and re.match(r'\S+\$ = \d+$', t.strip()):
+                    offsets.append(t)
+                    continue
+                if t.split()[:2] == [a.asm, 'PROC']:
+                    on = True
+                    print('\n'.join(offsets))
+                elif not on:
+                    offsets = []
+                if on:
+                    print(t)
+                if on and t.split()[:2] == [a.asm, 'ENDP']:
+                    break
+                continue
             if t.rstrip(':').strip('"') == a.asm:
                 on = True
             elif on and t and not t.startswith((' ', '\t', '.')):

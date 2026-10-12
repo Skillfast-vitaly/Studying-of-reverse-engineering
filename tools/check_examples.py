@@ -48,13 +48,16 @@ def compiler():
 
 
 GODBOLT_CC = "cmingw64_ucrt_gcc_1620"   # MinGW gcc 16.2 — та же версия, что в w64devkit 2.10.0
+# godbolt собран с UCRT, а w64devkit — с msvcrt-os: этот ключ переводит
+# заголовки MinGW в режим msvcrt, как у ученика (printf → __mingw_printf)
+GODBOLT_CRT = "-D__MSVCRT_VERSION__=0x700"
 
 
 def godbolt(code):
     """Компиляция без компоновки настоящим MinGW gcc через API godbolt.org
     (режим --godbolt: на макбуке ученика кросс-компилятора нет)."""
     import json
-    body = json.dumps({"source": code, "options": {"userArguments": "-O0 -w",
+    body = json.dumps({"source": code, "options": {"userArguments": "-O0 -w " + GODBOLT_CRT,
                        "filters": {"intel": True, "directives": True, "labels": True}}}).encode()
     out = subprocess.run(["curl", "-sS", "-m", "120", "-X", "POST",
                           "-H", "Content-Type: application/json", "-H", "Accept: application/json",
