@@ -790,6 +790,33 @@
         why:"Формула: начало + индекс × размер. "+t[0]+" занимает "+t[1]+" байт: <code>0x"+hex(base)+" + "+idx+" × "+t[1]+" = 0x"+hex(base)+" + 0x"+hex(idx*t[1])+" = 0x"+hex(right)+"</code>. Множитель в ассемблере выдаёт размер элемента (глава 4)." };
     } };
 
+  /* гл. 4.6: RSP после push и pop — push отнимает 8, pop прибавляет 8 */
+  MODES.rsp4 = {
+    label:"RSP после push/pop", drill:true,
+    make:function(){
+      var start = pick([0x1000, 0x2000, 0x7FF0, 0x1FF8, 0x10000, 0x5FF0]);
+      var regs = ["rax","rbx","rcx","rdx","rsi","rdi"], ops = [], rsp = start, depth = 0, k = ri(2,5);
+      for(var i=0;i<k;i++){
+        var isPush = depth === 0 || Math.random() < 0.6;
+        ops.push((isPush ? "push " : "pop  ")+pick(regs));
+        if(isPush){ rsp -= 8; depth++; } else { rsp += 8; depth--; }
+      }
+      var right = "0x"+hex(rsp);
+      return {
+        prompt:"Было RSP = 0x"+hex(start)+". Чему равен RSP после этих инструкций?",
+        value:ops.join("\n"), kind:"asm",
+        check:function(t){ var u = t.trim().toUpperCase().replace(/^0X/,"").replace(/H$/,""); return /^[0-9A-F]+$/.test(u) && parseInt(u,16) === rsp; },
+        right:right,
+        why:function(){
+          var pushes = ops.filter(function(o){ return o.indexOf("push") === 0; }).length, pops = ops.length - pushes;
+          return "Стек растёт вниз: каждый <code>push</code> отнимает от RSP 8, каждый <code>pop</code> прибавляет 8. Здесь "+
+                 pushes+" push и "+pops+" pop: 0x"+hex(start)+" − "+pushes+"×8 + "+pops+"×8 = 0x"+hex(start)+
+                 (pushes >= pops ? " − 0x"+hex((pushes-pops)*8) : " + 0x"+hex((pops-pushes)*8))+" = <code>"+right+"</code> (раздел 4.6).";
+        }
+      };
+    }
+  };
+
   var CREAD = [
     ["&x", ["адрес переменной x","значение по адресу x","x, умноженное на что-то","логическое И"], 0, "<code>&</code> перед переменной даёт её адрес (глава 5)."],
     ["*p", ["значение, лежащее по адресу из p","адрес переменной p","p, умноженное на что-то","указатель на указатель"], 0, "<code>*</code> перед указателем — «пойти по адресу» и взять значение. В ассемблере это скобки: <code>[rbx]</code>."],
@@ -3346,7 +3373,7 @@
   var GROUPS = [
     { id:"g02",  ch:"0–2",   title:"основы: закон, компьютер, путь к .exe", modes:["law","bits","build"], mix:"mix02" },
     { id:"g3",   ch:"3",     title:"числа: hex, порядок байтов, ASCII, знак", modes:["hex2dec","dec2hex","bin2dec","hexbin","endian","endian2","ascii","signed","signed32"], mix:"mix3" },
-    { id:"g45",  ch:"4–5",   title:"память и язык C", modes:["areas","elem","cread"], mix:"mix45" },
+    { id:"g45",  ch:"4–5",   title:"память и язык C", modes:["areas","elem","rsp4","cread"], mix:"mix45" },
     { id:"g68",  ch:"6–8",   title:"инструменты, первое вскрытие, формат PE", modes:["tool","pe","rva"], mix:"mix68" },
     { id:"g912", ch:"9–12",  title:"язык машины: регистры, инструкции, стек, вызовы", modes:["regs","jumps","ins","frame","rspframe","cc","api"], mix:"mix912" },
     { id:"g1315",ch:"13–15", title:"x64dbg, Ghidra, наблюдение за поведением", modes:["keys","dbg","behave"], mix:"mix1315" },
