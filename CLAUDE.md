@@ -1497,6 +1497,21 @@ tools/ida_mcp/     «Наставник IDA» — свой MCP-сервер ку
   сроки как в CAREER.md (основа ~7 месяцев, всё — полтора-два года);
   банк вопросов `mock-interview` дополнен (/GS, кадр от RSP, C++ по `cl`,
   протокол П9, `switch` без таблицы у gcc 15+).
+  **Ревизия П8–П9 свежим глазом (12.10.2026).** П8: «rustc 1.96
+  и старше» → «и раньше». П9: страницы установщика сверены
+  с `packaging/nsis/wireshark.nsi` ветки `release-4.6` (GitLab, raw):
+  лицензия — кнопка **Noted**, реклама «Do you use Wireshark
+  professionally?», USB Capture (Install USBPcap снята), Npcap
+  ставится своим окном (тихо — только OEM) с ключами
+  `/winpcap_mode=no /loopback_support=no`, галочка «Legacy loopback
+  support… Not needed for Wireshark» (руководство Npcap). Таблица
+  догадки П9.9 — 8 кадров, не 6; HTTP размечает и длиной
+  (`Content-Length` или `chunked`; живой ответ example.com —
+  `charset=utf-8`, `Transfer-Encoding: chunked`); `nslookup` обходит
+  службу DNS и DoH (блог Microsoft «Resolve-DnsName vs. nslookup»);
+  ссылки вперёд на 29.12, 30, 33–34 переписаны; ответы П9.2 (`01 2c`)
+  и П9.3 (перескок у подключения № 10, листинг gcc 16.2 `sal 4`/`add`/
+  `add 90`/`movzx edx, al`). Тренажёр `gp9` сверен — правок не нужно.
 - 24.09.2026 ученик попросил: «не забывай про интерактивное обучение,
   тренажёр по каждой главе и практику». Тренажёр — артефакт
   https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf (ссылка в README).
