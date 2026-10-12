@@ -1530,11 +1530,53 @@ tools/ida_mcp/     «Наставник IDA» — свой MCP-сервер ку
   в главах 6, 12, 13, 15 помечены «пока не написана». **Для ревизии
   глав 7–8:** в главе 7 (строки около 29, 85, 390) так же пометить
   ссылки на главы 23, 24, 25.
-  **Заявка: П10 «Уязвимости и защитные механизмы Windows» пишет эта
-  сессия (`mac-uchenik`, 12.10.2026)** — другим сессиям П10 не брать.
-  Кусками в `drafts/p10-*.md`, каждый сразу в обе ветки. Описательно,
-  по документации Microsoft и Intel, на своих учебных программах;
-  ошибку и защиту показываем, обходы — нет.
+  **П10: шестой обрыв фильтром за сессию (12.10.2026).** Эта сессия
+  взяла П10 и собирала материал. Ответ оборвал фильтр на сборке учебного
+  примера с ошибкой в проверке длины, ещё до текста приложения. Из П10
+  в репозиторий ничего не попало, заявка снята. **Новой сессии:** писать
+  П10 только о защитах — что включено, где включается, как увидеть
+  у себя. Новых примеров уязвимого кода не собирать: на ошибки ссылаться
+  на готовые разделы 9.8, 11.8, 4.7 и 29.12. Сверено и пригодится
+  (12.10.2026):
+  - флаги `DllCharacteristics` (PE Format, MicrosoftDocs/win32):
+    0x20 HIGH_ENTROPY_VA, 0x40 DYNAMIC_BASE, 0x100 NX_COMPAT,
+    0x4000 GUARD_CF; CET — бит 0x1 в отладочной записи
+    EX_DLLCHARACTERISTICS (тип 20); бит IBT там же — «not used by
+    Windows». ld из binutils для MinGW по умолчанию ставит dynamicbase,
+    high-entropy-va и nxcompat (tsaware — нет), то есть у программ
+    ученика 0x160 — пусть проверит в PE-bear;
+  - Visual Studio по умолчанию включает /GS, /NXCOMPAT, /DYNAMICBASE,
+    /HIGHENTROPYVA (для x64), а /guard:cf — нет (cpp-docs); /CETCOMPAT —
+    с VS 2019, только x64;
+  - DEP: у x64-программ включена всегда и не выключается, настраивается
+    только для 32-битных (Microsoft, Exploit protection);
+  - CFG, листинг cl 19.51 /O2 /guard:cf (godbolt): адрес цели
+    в RAX и `call QWORD PTR __guard_dispatch_icall_fptr` вместо
+    `call r9`; dumpbin /headers /loadconfig: «Guard», «CF Instrumented»,
+    «FID table present»;
+  - «Безопасность Windows» → «Управление приложениями/браузером» →
+    «Защита от эксплойтов» (System settings / Program settings,
+    «Use default (On)»); PowerShell `Get-ProcessMitigation -Name x.exe`,
+    NOTSET = по умолчанию; SEHOP — только для 32-битных программ
+    (у x64 обработчики в `.pdata`, cpp-docs «x64 exception handling»);
+  - Memory integrity (HVCI): «Безопасность устройства» → «Изоляция
+    ядра»; «HVCI is on by-default for most new Windows 11 devices»;
+    проверка — `Get-CimInstance -ClassName Win32_DeviceGuard -Namespace
+    root\Microsoft\Windows\DeviceGuard` (VirtualizationBasedSecurityStatus
+    2 = работает) и msinfo32; список уязвимых драйверов включён
+    по умолчанию с обновления Windows 11 2022, обновляется раз в квартал;
+  - подпись драйверов: с Windows 10 1607 новые драйверы ядра должна
+    подписать Microsoft (Dev Portal), исключение — Secure Boot выключен
+    (тестовый режим главы 29); PatchGuard — стоп-код 0x109
+    CRITICAL_STRUCTURE_CORRUPTION, в списке областей IDT (0x2), GDT
+    (0x3), критический MSR (0x7), управляющий регистр (0x15) — мостик
+    к главам 33–34;
+  - CR4: SMEP — бит 20, SMAP — 21, CET — 23 (только при CR0.WP = 1);
+    CPUID лист 7: EBX[7] SMEP, EBX[20] SMAP, ECX[7] теневой стек,
+    EDX[20] IBT (ia32-doc).
+  **Рамка от ученика (12.10.2026): «мне про Windows 10 и Windows 11
+  нужны, не Windows XP».** Во всём курсе: что есть и включено в Windows
+  10 и 11 x64; XP и Vista — не упоминать или полфразой для истории.
 - 24.09.2026 ученик попросил: «не забывай про интерактивное обучение,
   тренажёр по каждой главе и практику». Тренажёр — артефакт
   https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf (ссылка в README).
