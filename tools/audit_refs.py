@@ -49,4 +49,40 @@ for f in sorted(COURSE.glob("*.md")):
         print()
 
 print(f"Отсылок на главы, отсутствующие в карте: {problems}")
-sys.exit(1 if problems else 0)
+
+# Ссылки на разделы: «глава 12.5», «(16.5)», «П9.10» должны вести на
+# существующий заголовок «## 12.5.» Битая ссылка на раздел — ученик ищет
+# то, чего нет. Номера версий («rustc 1.99», «версия 3.21») пропускаем.
+heads = set()
+for f in sorted(COURSE.glob("*.md")):
+    for l in f.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"## (П?\d+)\.(\d+)\.", l)
+        if m:
+            heads.add(m.group(1) + "." + m.group(2))
+ref = re.compile(r"(?<![\d.\w/])(П\d+|[1-4]?\d)\.([1-9]\d?)(?![\d.]*\d)(?=[\s,)–—:;»]|\.\s|$)")
+version = re.compile(r"(rustc|python|py|версия|версии|v|под|ida|ghidra|wireshark|npcap|gcc)[\s:-]*$", re.I)
+bad_sections = 0
+for f in sorted(COURSE.glob("*.md")) + [ROOT / "ANSWERS.md", ROOT / "PRACTICE.md", ROOT / "CAREER.md"]:
+    if not f.exists():
+        continue
+    incode = False
+    for n, l in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        if l.startswith("```"):
+            incode = not incode
+            continue
+        if incode:
+            continue
+        for m in ref.finditer(l):
+            before = l[max(0, m.start() - 30):m.start()]
+            if not (m.group(1).startswith("П") or re.search(r"(глав|раздел|\()", before)):
+                continue
+            if version.search(before.rstrip("— ").rstrip()):
+                continue
+            if not m.group(1).startswith("П") and int(m.group(1)) > 40:
+                continue
+            key = m.group(1) + "." + m.group(2)
+            if key not in heads:
+                bad_sections += 1
+                print(f"  НЕТ РАЗДЕЛА {key}: {f.relative_to(ROOT)}:{n}  …{l[max(0, m.start() - 25):m.end() + 5].strip()}…")
+print(f"Ссылок на несуществующие разделы: {bad_sections}")
+sys.exit(1 if problems or bad_sections else 0)
