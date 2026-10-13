@@ -408,7 +408,7 @@ gcc позволяет вписать одну инструкцию прямо �
 ```
 CS = 0033, ring 3
 Trying hlt...
-Exception c0000096 at 00007FF7A3B815DC
+Exception c0000096 at 00007ff7a3b815dc
 ```
 
 Строки `hlt worked?!` нет: до неё дело не дошло. Код `C0000096`
@@ -433,8 +433,8 @@ Exception c0000096 at 00007FF7A3B815DC
 
 ```
 CS = 0033, ring 3
-Trying to read FFFF800000000000...
-Exception c0000005 at 00007FF7A3B8163E
+Trying to read ffff800000000000...
+Exception c0000005 at 00007ff7a3b8163e
 ```
 
 `C0000005` — старый знакомый из главы 26: **access violation**,

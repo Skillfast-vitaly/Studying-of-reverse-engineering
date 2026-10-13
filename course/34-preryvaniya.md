@@ -336,8 +336,8 @@ gcc -O0 -o vectors.exe vectors.c
 ```
 ./vectors.exe div
 code     c0000094
-address  00007FF6A1B215A8
-expected 00007FF6A1B215A8
+address  00007ff6a1b215a8
+expected 00007ff6a1b215a8
 ```
 
 Сведём все шесть в таблицу:

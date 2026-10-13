@@ -3049,7 +3049,7 @@ int main(void)
 ```
 CS = 0033, ring 3
 Trying cli...
-Exception c0000096 at 00007FF7A3B81685
+Exception c0000096 at 00007ff7a3b81685
 ```
 
 Рассуждение. `cli` запрещает аппаратные прерывания. Если бы программе

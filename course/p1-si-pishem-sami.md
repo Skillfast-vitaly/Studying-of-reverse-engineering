@@ -693,7 +693,7 @@ hello, value = 7
 double: 14
 square: 49
 unknown reason 5
-on_double is at 00007FF6…
+on_double is at 00007ff6…
 ```
 
 А вот как вызов из таблицы выглядит в машинном коде. Я собрал
