@@ -463,8 +463,24 @@
     </div>
   </details>
 
+  <details class="cheat">
+    <summary>Шпаргалка к приложению П10 — паспорт защит</summary>
+    <div class="cheat-body">
+      <table>
+        <tr><th>бит</th><th>имя</th><th>защита</th></tr>
+        <tr><td>0x0020</td><td>HIGH_ENTROPY_VA</td><td class="t">ASLR с большим разбросом</td></tr>
+        <tr><td>0x0040</td><td>DYNAMIC_BASE</td><td class="t">ASLR: файл можно сдвигать</td></tr>
+        <tr><td>0x0100</td><td>NX_COMPAT</td><td class="t">DEP</td></tr>
+        <tr><td>0x4000</td><td>GUARD_CF</td><td class="t">CFG</td></tr>
+        <tr><td>0x8000</td><td>TERMINAL_SERVER_AWARE</td><td class="t">не защита</td></tr>
+      </table>
+      <p class="sub" style="margin:10px 0">Поле — смещение 0x46 опционального заголовка (при <code>e_lfanew</code> = 0x80 — байт 0xDE файла), младшим байтом вперёд: <code>60 01</code> = 0x0160, так у MinGW. Каталог №10 — настройки загрузки: <code>SecurityCookie</code> (на диске <code>00002B992DDFA232</code>), <code>GuardFlags</code> (0x100 — проверки, 0x400 — список целей). Каталог №6, отладочная запись типа 20, бит 0x1 — совместим с CET.</p>
+      <p class="sub" style="margin:10px 0">C0000005: вид доступа 0 — чтение, 1 — запись, 8 — DEP. CFG в коде: <code>mov rax, [цель]</code> + <code>call [__guard_dispatch_icall_fptr]</code>. Уровни целостности: Low S-1-16-4096, Medium 8192, High 12288, System 16384; правило — не писать наверх. Где смотреть: PE-bear → Optional Hdr; Диспетчер задач → Подробности → Hardware-enforced Stack Protection и «С повышенными правами»; <code>whoami /groups</code>; <code>Get-ProcessMitigation -System</code>.</p>
+    </div>
+  </details>
+
   <footer>
-    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П9.<br>
+    Тренажёр к курсу <b>«Реверс-инжиниринг с нуля»</b>: главы 0–18, 20, 26–30, 32–34, 40 и приложения П1–П10.<br>
     Ошибся — прочитай разбор, он объясняет ход решения. Это важнее, чем угадать.
     Клавиши: <b>1–7</b> — выбрать вариант, <b>Enter</b> — дальше.
   </footer>
@@ -3077,6 +3093,152 @@
     }
   };
 
+  /* ── приложение П10: защитные механизмы Windows ── */
+
+  var BITS10 = [
+    [0x0020, "HIGH_ENTROPY_VA", "ASLR с большим разбросом"],
+    [0x0040, "DYNAMIC_BASE", "ASLR: файл можно сдвигать"],
+    [0x0080, "FORCE_INTEGRITY", "загружать только с подписью"],
+    [0x0100, "NX_COMPAT", "DEP: данные не выполняются"],
+    [0x0400, "NO_SEH", "нет обработчиков исключений"],
+    [0x1000, "APPCONTAINER", "только в контейнере приложений"],
+    [0x4000, "GUARD_CF", "CFG: проверка вызовов по указателю"],
+    [0x8000, "TERMINAL_SERVER_AWARE", "готов к удалённому столу — не защита"]
+  ];
+  var COMMON10 = [0x0020, 0x0040, 0x0100, 0x4000, 0x8000];
+  function bits10(v){ return BITS10.filter(function(b){ return v & b[0]; }); }
+  function sum10(v){ return bits10(v).map(function(b){ return "0x"+hex(b[0],4); }).join(" + "); }
+
+  MODES.dllch10 = {
+    label:"Флаги паспорта",
+    make:function(){
+      var v = 0;
+      COMMON10.forEach(function(b){ if(Math.random() < 0.6) v |= b; });
+      if(v === 0) v = 0x0160;
+      if(v & 0x4020) v |= 0x0040;          /* как в настоящих файлах: без ASLR эти два флага не действуют (П10.1г) */
+      var lo = v & 0xFF, hi = (v >> 8) & 0xFF, present = bits10(v);
+      var names = present.map(function(b){ return "<code>"+b[1]+"</code> — "+b[2]; }).join("; ");
+      if(Math.random() < 0.5){
+        var right = "0x"+hex(v,4), swapped = "0x"+hex(lo * 256 + hi, 4);
+        var opts = uniq9([right, swapped]);
+        fill4(opts, function(s){ return "0x"+hex((v ^ COMMON10[(s - 1) % 5] ^ (Math.floor((s - 1) / 5) << 1)) & 0xFFFF, 4); });
+        var all = shuffle(opts);
+        return { prompt:"Два байта поля DllCharacteristics в HxD. Какое это значение?", kind:"code",
+          value:hex(lo,2)+" "+hex(hi,2), options:all.map(C), answer:all.indexOf(right),
+          why:"Число лежит младшим байтом вперёд (глава 3): "+hex(hi,2)+" — старший, "+hex(lo,2)+" — младший, значит "+right+
+              ". Если прочитать в лоб, выйдет "+swapped+" — частая ошибка. "+right+" = "+sum10(v)+": "+names+" (П10.4)." };
+      }
+      var absent = BITS10.filter(function(b){ return !(v & b[0]); });
+      var it = pick(present), others = shuffle(absent).slice(0, 3);
+      var all2 = shuffle(others.concat([it]));
+      return { prompt:"Какой из этих флагов установлен?", kind:"code", value:"DllCharacteristics = 0x"+hex(v,4),
+        options:all2.map(function(b){ return C(b[1]); }), answer:all2.indexOf(it),
+        why:"Раскладываем по битам: 0x"+hex(v,4)+" = "+sum10(v)+". Это "+names+" (таблица П10.4)." };
+    }
+  };
+
+  var DEP10 = [
+    ["Страница с правами PAGE_READWRITE (0x04). В неё записан байт C3 (ret), и программа прыгает на неё",
+     ["исключение C0000005, вид доступа 8 — DEP", "ret выполнится и вернёт управление", "исключение C0000096 — привилегированная инструкция", "исключение C0000005, вид доступа 1"], 0,
+     "У страницы-данных нет права выполнения — бит XD (глава 32.6). Процессор не берёт даже первую инструкцию: нарушение доступа, вид 8 — это DEP (опыт dep.c, П10.6)."],
+    ["Права той же страницы сменили на PAGE_EXECUTE_READ (0x20) и снова прыгнули на неё",
+     ["ret выполнится и вернёт управление", "исключение C0000005, вид доступа 8", "исключение C0000005, вид доступа 1", "программа зависнет"], 0,
+     "Теперь это страница-код: выполнять и читать можно. Байт C3 — ret, он сразу возвращает обратно (dep.c, шаг 2)."],
+    ["Программа пишет байт в страницу с правами PAGE_EXECUTE_READ (0x20)",
+     ["исключение C0000005, вид доступа 1", "запись пройдёт", "исключение C0000005, вид доступа 8", "исключение C0000096"], 0,
+     "У страницы-кода нет права записи. Вид доступа 1 — «пытались писать» (документация EXCEPTION_RECORD, П10.6)."],
+    ["Программа читает байт из страницы PAGE_NOACCESS (0x01)",
+     ["исключение C0000005, вид доступа 0", "прочитается 0", "исключение C0000005, вид доступа 8", "исключение C0000096"], 0,
+     "PAGE_NOACCESS — никакого доступа (26.8). Вид доступа 0 — «пытались читать» (П10.6)."],
+    ["Для программы включён ACG. Она зовёт VirtualProtect(…, PAGE_EXECUTE_READ, …)",
+     ["VirtualProtect вернёт ошибку 1655, страница останется данными", "страница станет кодом", "программа сразу закроется", "исключение C0000096"], 0,
+     "ACG запрещает делать память исполняемой: ERROR_DYNAMIC_CODE_BLOCKED = 1655. Дальше прыжок на страницу упадёт уже на DEP (П10.11, упражнение П10.7)."],
+    ["64-битная программа хочет выключить для себя DEP",
+     ["не выйдет: у программ x64 DEP включена всегда", "выключится до перезапуска", "выключится, если запустить от имени администратора", "выключится, если в паспорте нет NX_COMPAT"], 0,
+     "Документация Microsoft о защите от эксплойтов: у всех программ x64 DEP включена, и выключить её нельзя. Выбор остался только у 32-битных (П10.6)."]
+  ];
+  MODES.dep10 = { label:"DEP и права страниц", make:function(){ return qa(DEP10, "Что произойдёт?", "text"); } };
+
+  var LEVELS10 = [
+    ["Untrusted — недоверенный", 0x0000], ["Low — низкий", 0x1000], ["Medium — средний", 0x2000],
+    ["High — высокий", 0x3000], ["System — системный", 0x4000], ["Protected process — защищённый процесс", 0x5000]
+  ];
+  MODES.sid10 = {
+    label:"SID уровней",
+    make:function(){
+      var it = pick(LEVELS10), rid = it[1], sid = "S-1-16-"+rid;
+      var calc = "0x"+hex(rid,4)+" = "+(rid / 4096)+" × 4096 = "+rid+" (0x1000 = 16³ = 4096, глава 3)";
+      if(Math.random() < 0.5){
+        var opts = uniq9([sid, "S-1-16-"+(rid / 4096 * 1000)]);
+        fill4(opts, function(s){ return "S-1-16-"+(rid + 4096 * s); });
+        var all = shuffle(opts);
+        return { prompt:"Уровень «"+it[0]+"», RID 0x"+hex(rid,4)+". Какой у него SID?", kind:"code", value:"RID 0x"+hex(rid,4),
+          options:all.map(C), answer:all.indexOf(sid),
+          why:"Уровень пишется SID вида S-1-16-число, а число — RID в десятичной системе: "+calc+
+              ". Ответ "+sid+" (П10.12). «S-1-16-"+(rid / 4096 * 1000)+"» — забыли перевести из hex." };
+      }
+      var others = shuffle(LEVELS10.filter(function(x){ return x !== it; })).slice(0, 3);
+      var all2 = shuffle(others.concat([it]));
+      return { prompt:"Какой это уровень целостности?", kind:"code", value:sid,
+        options:all2.map(function(x){ return x[0]; }), answer:all2.indexOf(it),
+        why:rid+" = 0x"+hex(rid,4)+" — это «"+it[0]+"». Обычные программы — Medium (S-1-16-8192), от имени администратора — High (S-1-16-12288) (П10.12)." };
+    }
+  };
+
+  var STEP10 = [
+    ["канарейка /GS", 0, "Канарейка стоит между буфером и адресом возврата и ловит его затирание перед ret (11.9, П10.8)."],
+    ["теневой стек CET", 0, "ret сравнивает адрес возврата с копией на теневом стеке; расхождение — #CP (П10.10)."],
+    ["CFG", 1, "CFG проверяет цель каждого вызова по указателю: это должно быть начало разрешённой функции (П10.9)."],
+    ["DEP", 2, "Данные не выполняются: свои байты в буфере не запустить (П10.6)."],
+    ["ACG", 2, "Запрещает делать память исполняемой — вместе с DEP закрывает выполнение своего кода (П10.11)."],
+    ["ASLR", 3, "Адреса образа, стека и куч случайны: атакующий не знает, куда направить RIP (П10.7)."],
+    ["проверка целостности кучи", 4, "Куча проверяет свои служебные записи и при порче закрывает программу (П10.11)."]
+  ];
+  MODES.step10 = { label:"Защита и шаг атаки",
+    make:function(){ return fixed(STEP10, "По какому шагу атаки бьёт эта защита?", "text",
+      ["перехват RIP через адрес возврата", "перехват RIP через указатель на функцию", "выполнение своего кода", "знание адресов заранее", "порча служебных данных кучи"]); } };
+
+  var WHERE10 = [
+    ["Флаги DllCharacteristics файла", ["PE-bear → Optional Hdr → Dll Characteristics", "Диспетчер задач → Подробности", "whoami /groups", "Get-ProcessMitigation -System"], 0,
+     "Это поле опционального заголовка; PE-bear перечислит биты словами (П10.4)."],
+    ["Совместим ли файл с теневым стеком CET", ["отладочная запись типа 20 — скриптом zashchity.py", "PE-bear → Optional Hdr", "колонка «С повышенными правами»", "whoami /groups"], 0,
+     "Бит 0x1 записи EX_DLLCHARACTERISTICS. PE-bear тип 20 по имени не знает и пишет <Unknown> (П10.4, П10.5)."],
+    ["Работает ли теневой стек у запущенной программы", ["Диспетчер задач → Подробности → колонка Hardware-enforced Stack Protection", "PE-bear → Optional Hdr", "whoami /groups", "HxD, смещение 0xDE"], 0,
+     "Колонку включают через «Выбрать столбцы»; у Chrome там Compatible modules only (П10.10)."],
+    ["Свой уровень целостности в консоли", ["whoami /groups", "Get-ProcessMitigation -System", "PE-bear → Optional Hdr", "msinfo32"], 0,
+     "Строка Mandatory Label: Medium (S-1-16-8192), а от имени администратора — High (П10.12)."],
+    ["Запущена ли программа от имени администратора", ["Диспетчер задач → Подробности → колонка «С повышенными правами»", "PE-bear → Optional Hdr", "HxD", "zashchity.py"], 0,
+     "Elevated = «Да» у процессов на уровне High (П10.12)."],
+    ["Умолчания защит от эксплойтов для всей системы", ["Get-ProcessMitigation -System", "whoami /groups", "PE-bear → Optional Hdr", "Get-Process notepad"], 0,
+     "NOTSET в выводе — «не задано, действует умолчание Windows» (П10.11)."],
+    ["Адрес эталона канарейки в файле", ["поле SecurityCookie в настройках загрузки", "поле DllCharacteristics", "секция .reloc", "отладочная запись типа 20"], 0,
+     "Настройки загрузки — каталог данных №10; zashchity.py печатает SecurityCookie (П10.5, П10.8)."],
+    ["Есть ли в файле проверки CFG", ["флаг GUARD_CF и биты 0x100, 0x400 в GuardFlags", "флаг NX_COMPAT", "секция .reloc", "колонка «С повышенными правами»"], 0,
+     "dumpbin пишет то же словами: Guard, CF Instrumented, FID table present (П10.9)."]
+  ];
+  MODES.where10 = { label:"Где смотреть", make:function(){ return qa(WHERE10, "Где это увидеть?", "text"); } };
+
+  var TERMS10 = [
+    ["vulnerability","уязвимость","валнерабúлити"], ["exploit","эксплойт","эксплóйт"], ["mitigation","мера защиты","митигéйшен"],
+    ["data directories","каталоги данных","дéйта дирéктериз"], ["relocations","таблица поправок","рилоукéйшенз"],
+    ["entropy","энтропия: сколько случайных бит","э́нтропи"], ["just-in-time","точно в срок: код создаётся во время работы","джаст-ин-тáйм"],
+    ["indirect call","косвенный вызов","индирéкт кол"], ["bitmap","битовая карта","битмэп"], ["shadow stack","теневой стек","шэ́доу стэк"],
+    ["access token","маркер доступа","э́ксес тóукен"], ["integrity level","уровень целостности","интéгрити лéвел"],
+    ["no write up","не писать наверх","нóу райт ап"], ["UAC","контроль учётных записей","ю-эй-си"],
+    ["PPL","облегчённый защищённый процесс","пи-пи-эл"]
+  ];
+  MODES.terms10 = {
+    label:"Слова защиты",
+    make:function(){
+      var it = pick(TERMS10);
+      var others = shuffle(TERMS10.filter(function(t){ return t !== it; })).slice(0, 3);
+      var all = shuffle(others.concat([it]));
+      return { prompt:"Выбери перевод термина", kind:"text", value:it[0],
+        options:all.map(function(t){ return t[1]; }), answer:all.indexOf(it),
+        why:"<code>"+it[0]+"</code> <code>["+it[2]+"]</code> — «"+it[1]+"». Все термины — в GLOSSARY.md, раздел «Защиты Windows (приложение П10)»." };
+    }
+  };
+
   /* ── глава 40: профессия реверсера ── */
 
   var PROF40 = [
@@ -3390,6 +3552,7 @@
     { id:"gp7",  ch:"П7",    title:"приложение: C++ в дизассемблере", modes:["layout7","slot7","mangle7","sign7","str7","terms7"], mix:"mixp7" },
     { id:"gp8",  ch:"П8",    title:"приложение: Rust в дизассемблере", modes:["idx8","vec8","opt8","name8","xmm8","terms8"], mix:"mixp8" },
     { id:"gp9",  ch:"П9",    title:"приложение: разбор сетевого трафика", modes:["order9","seq9","frame9","flags9","filt9","terms9"], mix:"mixp9" },
+    { id:"gp10", ch:"П10",   title:"приложение: защитные механизмы Windows", modes:["dllch10","dep10","sid10","step10","where10","terms10"], mix:"mixp10" },
     { id:"g26",  ch:"26",    title:"процессы, потоки, память", modes:["own","pstate","prot","valloc","half","ptype","terms26"], mix:"mix26" },
     { id:"g27",  ch:"27",    title:"кольца и ядро", modes:["cs","priv","door","code","where","terms27"], mix:"mix27" },
     { id:"g28",  ch:"28",    title:"системные вызовы", modes:["stub","sysregs","ntstatus","callpath","native","terms28"], mix:"mix28" },
