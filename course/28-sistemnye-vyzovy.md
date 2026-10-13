@@ -589,7 +589,7 @@ K  ntoskrnl.exe   NtCreateFile       настоящая NtCreateFile, в ядр�
 K  ntoskrnl.exe   KiSystemServiceCopyEnd
 U  ntdll.dll      NtCreateFile       заглушка
 U  KERNELBASE.dll …                  несколько строк: CreateFileW, CreateFileA
-U  nofile.exe     nofile.exe + 0x1532
+U  nofile.exe     nofile.exe + 0x1532        число у тебя своё
 …
 ```
 
