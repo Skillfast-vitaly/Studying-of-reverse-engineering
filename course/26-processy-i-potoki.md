@@ -240,9 +240,9 @@ gcc -O0 -o threads.exe threads.c
 
 ```
 Process 7412
-Thread  9120: local=0 at 000000E5A3BFF8BC, shared at 00007FF7B2C48000
-Thread  4336: local=1 at 000000E5A3DFF93C, shared at 00007FF7B2C48000
-Thread 11060: local=2 at 000000E5A3FFFA2C, shared at 00007FF7B2C48000
+Thread  9120: local=0 at 000000e5a3bff8bc, shared at 00007ff7b2c48000
+Thread  4336: local=1 at 000000e5a3dff93c, shared at 00007ff7b2c48000
+Thread 11060: local=2 at 000000e5a3fffa2c, shared at 00007ff7b2c48000
 Press Enter to exit
 ```
 
@@ -498,9 +498,11 @@ SizeOfStackCommit     0x1000      сколько выделить сразу: о
 
 Обрати внимание на `0x40` — **выполнение и запись одновременно**. В обычной
 программе такой памяти почти нет: код не пишут, а данные не исполняют
-(вспомни DEP из главы 11). Когда в коде видишь `VirtualAlloc` с `0x40`,
-программа собирается **записать код в память и выполнить его**. Так
-работают упаковщики (глава 24) и некоторые честные программы, например
+(вспомни DEP из главы 11; подробно — приложение П10.6). Когда в коде
+видишь `VirtualAlloc` с `0x40`, программа собирается **записать код
+в память и выполнить его**. Так
+работают упаковщики (глава 24, пока не написана) и некоторые честные
+программы, например
 движки JavaScript в браузерах. В любом случае — место, где стоит
 присмотреться.
 
@@ -641,14 +643,14 @@ gcc -O0 -o where.exe where.c
 
 ```
 page 4096 bytes, granularity 65536 bytes
-code     00007FF7B2C415FB  alloc 00007FF7B2C40000  size   7000  COMMIT  IMAGE   prot 20
-global   00007FF7B2C48000  alloc 00007FF7B2C40000  size   1000  COMMIT  IMAGE   prot 4
-string   00007FF7B2C490A3  alloc 00007FF7B2C40000  size   3000  COMMIT  IMAGE   prot 2
-stack    000000E5A3BFF8DC  alloc 000000E5A3A00000  size   1000  COMMIT  PRIVATE prot 4
-heap     0000020C5A6414A0  alloc 0000020C5A640000  size   d000  COMMIT  PRIVATE prot 4
-reserve  0000020C5A7C0000  alloc 0000020C5A7C0000  size 100000  RESERVE PRIVATE
-page 0   0000020C5A7C0000  alloc 0000020C5A7C0000  size   1000  COMMIT  PRIVATE prot 4
-page 1   0000020C5A7C1000  alloc 0000020C5A7C0000  size  ff000  RESERVE PRIVATE
+code     00007ff7b2c415fb  alloc 00007ff7b2c40000  size   7000  COMMIT  IMAGE   prot 20
+global   00007ff7b2c48000  alloc 00007ff7b2c40000  size   1000  COMMIT  IMAGE   prot 4
+string   00007ff7b2c490a3  alloc 00007ff7b2c40000  size   3000  COMMIT  IMAGE   prot 2
+stack    000000e5a3bff8dc  alloc 000000e5a3a00000  size   1000  COMMIT  PRIVATE prot 4
+heap     0000020c5a6414a0  alloc 0000020c5a640000  size   d000  COMMIT  PRIVATE prot 4
+reserve  0000020c5a7c0000  alloc 0000020c5a7c0000  size 100000  RESERVE PRIVATE
+page 0   0000020c5a7c0000  alloc 0000020c5a7c0000  size   1000  COMMIT  PRIVATE prot 4
+page 1   0000020c5a7c1000  alloc 0000020c5a7c0000  size  ff000  RESERVE PRIVATE
 ```
 
 Разбираем по группам.
@@ -657,7 +659,7 @@ page 1   0000020C5A7C1000  alloc 0000020C5A7C0000  size  ff000  RESERVE PRIVATE
 65536 байт (64 КБ).
 
 **Код, глобальная переменная, строка.** У всех трёх **одна и та же база
-выделения** — `00007FF7B2C40000`. Это база образа `where.exe` (глава 8):
+выделения** — `00007ff7b2c40000`. Это база образа `where.exe` (глава 8):
 все три живут внутри одного загруженного файла, поэтому тип у всех
 `IMAGE`. А права разные, потому что это разные **секции**:
 
@@ -671,8 +673,10 @@ page 1   0000020C5A7C1000  alloc 0000020C5A7C0000  size  ff000  RESERVE PRIVATE
 упражнение 26.3.
 
 Это та самая карта из главы 4, только теперь её подтвердила сама Windows.
-Посмотри и на младшие цифры адресов: `...415FB`, `...48000`, `...490A3` —
-база плюс RVA, как в главе 8.
+Посмотри и на младшие цифры адресов: `...415fb`, `...48000`, `...490a3` —
+база плюс RVA, как в главе 8. (Буквы в адресах программа печатает
+маленькими — так делает `printf` библиотеки MinGW, глава 13; x64dbg
+пишет те же числа большими. Это одно и то же число.)
 
 **Стек и куча.** Тип `PRIVATE`: эту память процессу выдали лично, её нет
 ни в каком файле. Права — чтение и запись. Базы выделения свои: у стека —
