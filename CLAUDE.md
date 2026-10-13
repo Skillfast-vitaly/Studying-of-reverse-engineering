@@ -1629,6 +1629,44 @@ tools/ida_mcp/     «Наставник IDA» — свой MCP-сервер ку
   заходов (защиты программ), третий заход (ядро) — в новой сессии,
   отдельно, строго «что включено, где включается, как увидеть», без
   описания того, как ошибки ядра используют.
+  **П10 (два захода) готово** (13.10.2026, `course/p10-zashchity.md`,
+  ~1480 строк): П10.1–П10.13 + «Что запомнить», 9 упражнений, ответы,
+  словарь «Защиты Windows (приложение П10)» (23 термина), тренажёр
+  `gp10` (6 режимов) и шпаргалка, **версия 33**; README — 🚧 (третий
+  заход не написан). Черновики удалены. Опыты `dep.c`, `aslr.c` и
+  дописка `cpuinfo.c` собраны MinGW gcc 16.2 (и `cl` 19.51) через
+  godbolt, запуска на Windows не было — выводы «примерно так».
+  **Сверено (12–13.10.2026):** PE Format — биты `DllCharacteristics`,
+  раскладка Load Config (`SecurityCookie` +88, `GuardFlags` +144 у PE32+),
+  отладочная запись 20 (`CET_COMPAT` 0x1); LLVM COFF.h — `GuardFlags`
+  (0x400000 EH continuation, старшие 4 бита — лишние байты записи);
+  binutils `pep.em` — у MinGW по умолчанию `0x0160`; GNU ld заполняет
+  Load Config только если в компоновке есть `_load_config_used` (в
+  libmingwex он есть, но его никто не тянет); MinGW gcc 16.2 не знает
+  `-mguard=cf`; cpp-docs — `/GS`, `/NXCOMPAT`, `/DYNAMICBASE`,
+  `/HIGHENTROPYVA` по умолчанию включены, `/guard:cf` и `/guard:ehcont`
+  выключены, `/CETCOMPAT` с VS 2019 только x64; CFG в листинге cl 19.51
+  `/O2 /guard:cf`: `mov rax,[r10+rax*8]` + `call [__guard_dispatch_icall_fptr]`;
+  эталон канарейки на диске у DLL Microsoft — `00002B992DDFA232`;
+  справочник «Exploit protection reference»: DEP у x64 не выключается,
+  CFG в Windows включён, ACG — `STATUS_DYNAMIC_CODE_BLOCKED` (Win32 1655);
+  `EXCEPTION_RECORD` — вид доступа 8 = DEP; блог Google (2021) — колонка
+  «Hardware-enforced Stack Protection», Windows 10 20H1, Intel 11+/Zen 3+;
+  ia32-doc — #CP вектор 21, CR4.CET бит 23 (нужен CR0.WP), CPUID 7:
+  ECX[7] CET_SS, EDX[20] IBT, VMCS `GUEST_SSP` 0x682A, `GUEST_S_CET`
+  0x6828; MIC и «Well-known SIDs» — уровни и RID; «How UAC works» — два
+  маркера; PPL — «Protecting anti-malware services» (поле `Protection`
+  в `EPROCESS`, отладчик ядра можно) и «Configure added LSA protection»
+  (событие WinInit 12, автовключение — только чистая установка 22H2+
+  в домене); Mandiant (2020) — ASLR образа держится до перезагрузки,
+  17–19 бит у x64; PE-bear — надписи флагов, тип 20 = `<Unknown>`;
+  x64dbg — «First chance exception on %p (%.8X, %s)!»; `__mingw_printf`
+  печатает `%p` строчными буквами (mingw_pformat.c) — **в главе 26
+  примеры вывода `%p` даны заглавными, поправить при вычитке 26.**
+  **Ждём от ученика по П10:** выводы `dep.exe`, `aslr.exe` (четыре
+  запуска), `zashchity.py` на своих файлах и `cmd.exe`/`kernel32.dll`,
+  `cpuinfo` с CET_SS на обоих ПК, значения «по умолчанию» в окне
+  «Защиты от эксплойтов».
 - 24.09.2026 ученик попросил: «не забывай про интерактивное обучение,
   тренажёр по каждой главе и практику». Тренажёр — артефакт
   https://claude.ai/artifact/2UULEnh9wsTTKAgk9So5Xf (ссылка в README).
